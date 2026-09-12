@@ -1851,6 +1851,74 @@ recoup          = (theatrical take + afterlife) / (production budget + marketing
 - **Three numbers are tracked separately on every film**: worldwide gross (the headline), recoupment / estimated profit (the truth), and the verdict (the label). Career routing splits accordingly: **fame** (star power, fan popularity, records, news) follows gross; **trust** (studio relationship, momentum, rehire odds, franchise decisions) follows the verdict.
 - Accepted consequence: verdicts are truthfully harsher than the Phase 1 gross ladder (most films lose money theatrically; a Hit means something). The Phase 4 balance pass re-tunes the Commercial impacts so a break-even indie still advances a rookie through the fame channel.
 
+## BOX OFFICE ENGINE — BEHAVIOURAL SPECIFICATION (Phase 4)
+
+**Decision of record (2026-09-12).** This section specifies how the Phase 4 box office engine must behave and the model that satisfies it. It refines Part 1's "Box Office Engine" and "Box Office Realism" sections; where they differ, this governs. Do not build a "budget × multiplier" or "declines a fixed % every week" model.
+
+### Core principle
+
+A movie's total is **opening × legs**, where opening and legs are driven by *different, mostly independent* factors, combined multiplicatively with controlled variance — so results fan out into a wide spread instead of clustering near the budget. Domestic and international are simulated as two separate runs of the same equations with different constants and calendars; worldwide is their sum.
+
+### Opening (awareness-driven)
+
+```
+opening_dom  = budget × tierBase × marketing × stars × franchise × genrePop_dom
+               × window_dom(week) × genreWindow × competition × buzz × luck
+opening_intl = opening_dom × intlRatio(genre, tier, stars) × window_intl(week) × luck_intl
+```
+
+- *marketing*: the studio's per-film spend vs. its tier norm (spend is a per-film decision, not a fixed ratio).
+- *stars*: cast star power weighted by role influence; matters far more on a tentpole than an indie.
+- *franchise*: 1.0 until the franchise entity exists (Phase 5/6 hook).
+- *window*: the market size that calendar week; *genreWindow*: romance at Valentine's, horror at Halloween, family at Christmas, action in summer.
+- *competition*: the share of that week's audience left after films with overlapping audiences (genre affinity × tier) open the same week.
+- *buzz*: pre-release hype from commercial potential, early critic screenings, and a seeded trailer roll.
+- *luck*: log-shaped and bounded — widens the spread, never overrides the fundamentals.
+
+### Legs (reception-driven; budget never appears)
+
+```
+retention_n = base(genre, market) × reception × WOM × competition_n × age_n × discovery
+week_n      = week_(n−1) × retention_n × window(week_n) / window(week_(n−1))
+```
+
+- *reception*: audience + critic scores (±15%).
+- **Word of mouth (WOM)**: a hidden per-film stat that evolves weekly. It starts at the audience score minus the hype gap (marketing promised more than the film delivered → negative) and drifts toward true reception at a speed set by how many people have seen it — small openings spread slowly, which is why sleepers take weeks. Shown to the player only as a band (building / strong / fading / toxic). Factor range ≈ 0.7–1.3.
+- *discovery*: extra lift when WOM is strong **and** the opening was small for the film's size — the audience hasn't found it yet. This is the term that pushes **retention above 100%**.
+- *competition_n*: new openers that week with overlapping audiences pull the film down; when a rival fades, the film breathes.
+- *age_n*: no penalty through week 4, then a gentle screen-loss decay — long runs are possible but not free.
+- The seasonal ratio lifts the *whole market*: a film on $8M that rolls into Christmas week does $12M with nothing else changing.
+- A rare seeded viral event (≈1% of films) spikes WOM in week 2–3.
+- A run ends when a week falls below ~2% of the film's **peak** week (a sleeper's peak is later than its opening), or at 16 weeks.
+
+**Retention MUST be able to exceed 100%** for exceptional word of mouth, so a film can grow week over week rather than merely decline more slowly. Great buzz = holds under 30%/week or grows; bad buzz = 65–80% collapses.
+
+### Release calendar (`ReleaseCalendarEngine`)
+
+A 52-week market-size table per market. Domestic peaks at July 4 (~1.4×), Thanksgiving (~1.35×), Christmas (~1.6×), Memorial Day and summer; dead zones in early September and early December (~0.8×). International has its own shape (weaker on US-specific holidays, stronger through Christmas and mid-year). At wrap, the studio scores candidate release weeks — market size × genre fit − expected competition — and claims one; tentpoles take corridors, small films dodge them. When a bigger film lands on a smaller one's date the smaller may move ±2 weeks — rarely, always with a news line, and this can happen to the player's film.
+
+### Verdict
+
+The recoupment formula in the Box Office Verdicts section above (theatrical take dom 0.50 / intl 0.40 plus the audience- and genre-driven afterlife, over budget + marketing; ladder 0.40 / 0.75 / 1.10 / 1.50 / 2.00 / 3.00; All-Time gated on a top-of-recent-history gross). Fame routes off gross; trust routes off verdict. Tags: Sleeper, Cult seed, Beat/Missed expectations.
+
+### Behaviours that must be possible (verified, not assumed)
+
+| # | Behaviour | Produced by |
+|---|---|---|
+| 1 | **Big-budget flop** — strong opening, bad reception tanks legs, finishes under break-even | big awareness → big opening; toxic WOM → retention 0.2–0.35 → dead by week 4 |
+| 2 | **$100–150M film legs out to ~$1B** — upside must exist at mid budgets | great reception + strong WOM → retention 0.75–0.95 through a summer corridor → 12+ week run, huge international |
+| 3 | **Indie sleeper** — tiny opening, phenomenal WOM, grows for several weeks, legs to a large multiple of a micro budget | small opening + high WOM → discovery → retention > 1.0 in weeks 2–4 |
+| 4a | **Non-opening peak: true sleeper** (wk1 $3M → wk2 $4.2M → wk3 $5.1M, then down) | as 3 |
+| 4b | **Non-opening peak: holiday leg-up** (opens $8M, hits Christmas week at $12M) | seasonal ratio lifts any film still playing into a corridor |
+| 5 | **Superstar/great films that disappoint; mediocre films that overperform** — reception and commercial outcome are different axes | opening comes from awareness, legs from reception |
+| 6 | **Rare viral breakouts** as genuine outliers | seeded WOM spike |
+
+### Verification (run after building; results shown before moving on)
+
+A headless harness over ~300 films across all six tiers, through the real engine in a universe with a live calendar (so competition is real). Report: per-tier final worldwide spread (min / p10 / p50 / p90 / max) — it must be **wide at every tier**, not a band near break-even; biggest hit and biggest flop; the recoupment-verdict distribution, **flagged if any single label exceeds ~60%**; the count of films whose peak week was not week 1; and the full week-by-week numbers of one concrete example of each behaviour above. If the engine cannot produce a week bigger than week 1, or results cluster into a narrow band, it is too linear — fix retention (allow > 100%) and the seasonal multiplier before proceeding. The verdict distribution is expected to lean Flop/Average by design; the flag is for clustering.
+
+All threshold and decay numbers are tunable, not final — Phase 8 calibrates them.
+
 ## ENTITY PROFILE PAGES
 
 Every actor, actress, director, and movie generated in the universe has
