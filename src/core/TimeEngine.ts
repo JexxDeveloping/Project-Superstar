@@ -69,6 +69,8 @@ export function formatDate(week: number, epochYear: number): string {
 // The weekly tick
 // ---------------------------------------------------------------------------
 
+export const APPLICATION_HISTORY_CAP = 150;
+
 export interface TickOptions { worldOnly?: boolean }
 
 export function advanceWeek(state: GameState, ws: WorkingSet, opts: TickOptions = {}): TimelineEvent[] {
@@ -326,6 +328,13 @@ export function advanceWeek(state: GameState, ws: WorkingSet, opts: TickOptions 
     state.weeklyReport = events;
     state.timeline.push(...events);
     if (state.timeline.length > TIMELINE_CAP) state.timeline.splice(0, state.timeline.length - TIMELINE_CAP);
+    // Keep hot state small over a 55-year career: resolved applications older than the last 150 go.
+    const live = state.applications.filter((a) => a.status === 'applied' || a.status === 'audition_pending' || a.status === 'offer' || a.status === 'booked' || a.status === 'in_production');
+    const resolved = state.applications.filter((a) => !live.includes(a));
+    if (resolved.length > APPLICATION_HISTORY_CAP) {
+      const keep = new Set(resolved.slice(-APPLICATION_HISTORY_CAP));
+      state.applications = state.applications.filter((a) => live.includes(a) || keep.has(a));
+    }
     state.weekPlan = [];
   }
   return events;

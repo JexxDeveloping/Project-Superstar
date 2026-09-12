@@ -149,13 +149,16 @@ export function applyPerformanceImpacts(person: Person, ws: WorkingSet, deltas: 
     }
     if (d.target.startsWith('genre:')) {
       const g = d.target.slice('genre:'.length) as Genre;
-      person.genres[g] = clamp(person.genres[g] + d.amount, 1, 100);
+      const room = d.amount > 0 ? Math.max(0.05, 1 - person.genres[g] / 100) : 1;
+      person.genres[g] = clamp(person.genres[g] + d.amount * room, 1, 100);
       continue;
     }
     const key = d.target as keyof Person['attributes'];
     if (key in person.attributes) {
       const cap = key === 'acting' && !person.isPlayer ? person.ceiling : 100;
-      person.attributes[key] = clamp(person.attributes[key] + d.amount, 1, cap);
+      // Craft grows slower the better you already are: the road from 90 to 95 is longer than 40 to 60.
+      const room = key === 'acting' && d.amount > 0 ? Math.max(0.02, (1 - person.attributes.acting / 100) ** 2) : 1;
+      person.attributes[key] = clamp(person.attributes[key] + d.amount * room, 1, cap);
     }
   }
 }

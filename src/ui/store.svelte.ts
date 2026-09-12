@@ -181,11 +181,14 @@ class GameStore {
     const game = this.game;
     if (!game) return;
     this.state = structuredClone(game.state);
+    // The working set is shared by reference: engines only mutate it inside synchronous commands/ticks,
+    // never during a render, and a fresh wrapper object is enough to re-render every consumer.
+    // Cloning ~4,000 films per click cost ~300 ms in a late-career save.
     this.world = {
-      movies: structuredClone(game.ws.movies),
-      directors: structuredClone(game.ws.directors),
-      studios: structuredClone(game.ws.studios),
-      people: structuredClone(game.ws.people),
+      movies: game.ws.movies,
+      directors: game.ws.directors,
+      studios: game.ws.studios,
+      people: game.ws.people,
     };
     this.actionsRemaining = game.actionsRemaining;
   }

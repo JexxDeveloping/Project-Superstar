@@ -67,17 +67,21 @@ export function listingVisibility(starPower: number, tier: BudgetTier, roleType:
     return r <= 1 ? 0.25 : 0.03;
   }
   if (starPower < 80) {
-    if (t <= 1) return r >= 3 ? 0.6 : 0.15; // still hears about indie leads
-    if (t <= 3) return 1;
-    return r >= 2 && r <= 3 ? 0.7 : r <= 1 ? 0.3 : 0.12;
+    if (t <= 1) return r >= 3 ? 0.5 : r === 2 ? 0.1 : 0; // still hears about indie leads, not indie bit parts
+    if (t === 2) return r >= 2 ? 1 : 0.15;
+    if (t === 3) return 1;
+    return r >= 2 && r <= 3 ? 0.7 : r <= 1 ? 0.2 : 0.12;
   }
   if (starPower < 90) {
-    if (t <= 1) return r >= 3 ? 0.4 : 0.05;
-    if (t === 2) return r >= 2 ? 0.6 : 0.1;
-    if (t === 3) return r >= 2 ? 1 : 0.2;
-    return r >= 2 ? 1 : 0.1;
+    if (t <= 1) return r >= 3 ? 0.3 : 0; // the occasional indie lead as a prestige play
+    if (t === 2) return r >= 3 ? 0.6 : r === 2 ? 0.15 : 0;
+    if (t === 3) return r >= 3 ? 1 : r === 2 ? 0.4 : 0;
+    return r >= 2 ? 1 : 0;
   }
-  return r >= 2 ? 1 : 0.05; // superstars: every real part, no bit parts
+  // Superstars: leads and co-leads on studio films; an indie lead now and then; never bit parts.
+  if (t <= 1) return r >= 3 ? 0.2 : 0;
+  if (t === 2) return r >= 3 ? 0.4 : 0;
+  return r >= 3 ? 1 : r === 2 ? 0.25 : 0;
 }
 
 function fitsPlayer(state: GameState, role: Role): boolean {
@@ -177,8 +181,10 @@ export function findListing(state: GameState, listingId: Id): AuditionListing | 
   return state.listings.find((l) => l.id === listingId);
 }
 
+/** The most recent application for a listing (a role can be applied for, then later offered directly). */
 export function findApplication(state: GameState, listingId: Id): Application | undefined {
-  return state.applications.find((a) => a.listingId === listingId);
+  for (let i = state.applications.length - 1; i >= 0; i--) if (state.applications[i].listingId === listingId) return state.applications[i];
+  return undefined;
 }
 
 /** Can the player apply right now? Returns a reason string when not. */

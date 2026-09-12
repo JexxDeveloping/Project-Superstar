@@ -161,10 +161,15 @@ export function addXp(p: Person, amount: number): { leveledUp: boolean; level: n
   return { leveledUp, level: newLevel };
 }
 
-/** Diminishing training gain: strong early, slow near 100. */
+/**
+ * Diminishing training gain. Classes teach fundamentals: strong below ~50, thin by 70, nothing past
+ * TRAINING_CEILING. Beyond that only the work itself (and great directors) moves the number — and
+ * Part 1 wants 95–100 to be extremely hard.
+ */
+export const TRAINING_CEILING = 80;
 function trainingGain(current: number, base: number, variance: number): number {
-  const factor = Math.max(0.08, 1 - current / 105);
-  return Math.max(0.05, (base + variance) * factor);
+  const room = Math.max(0, 1 - current / TRAINING_CEILING);
+  return Math.max(0, (base + variance) * room ** 1.5);
 }
 
 // ---------------------------------------------------------------------------
@@ -264,6 +269,14 @@ export function resolvePlayerWeek(state: GameState, bus: EventBus): void {
     p.energy = clamp(p.energy + (filming ? -6 : 10), 0, 100);
     p.stress = clamp(p.stress + (filming ? 3 : -5), 0, 100);
   }
+
+  // A name needs work to stay a name: the same slow fade NPCs get, faster when idle for a year+.
+  const idleWeeks = week - p.lastWorkedWeek;
+  let fade = 0.015;
+  if (!state.activeProduction && idleWeeks > 40) fade += 0.05 + Math.min(0.15, (idleWeeks - 40) / 1000);
+  p.attributes.starPower = clamp(p.attributes.starPower - fade, 1, 100);
+  p.attributes.fanPopularity = clamp(p.attributes.fanPopularity - fade * 0.8, 1, 100);
+  if (p.attributes.starPower > p.peakStarPower) p.peakStarPower = p.attributes.starPower;
 
   // Living expenses.
   p.cash -= state.weeklyExpenses;

@@ -17,6 +17,7 @@ import { generateActor, takenNames } from '../sim/NPCEngine';
 import { attachPerson } from './MovieEngine';
 import { VERDICT_RANK } from './BoxOfficeEngine';
 import { agentEffects, agentFor } from '../world/AgentEngine';
+import { listingVisibility } from './AuditionEngine';
 
 /** Star power the studio "expects" for a role at each budget level. */
 export const EXPECTED_STAR: Record<BudgetTier, number> = {
@@ -137,12 +138,16 @@ export function findDirectOffer(state: GameState, ws: WorkingSet): { movie: Movi
   const chance = directOfferChance(player.attributes.starPower) * agentEffects(agentFor(state)).directOfferMultiplier;
   if (chance <= 0 || !rng.chance(chance)) return null;
   const busyIds = new Set(state.applications.filter((a) => a.status === 'applied' || a.status === 'audition_pending' || a.status === 'offer' || a.status === 'booked').map((a) => a.movieId));
+  // Never offer a part the player has already applied for (that application owns the listing id).
+  const appliedRoleIds = new Set(state.applications.map((a) => a.roleId));
   const options: { movie: Movie; role: Role; fit: number }[] = [];
   for (const movie of ws.movies.values()) {
     if (movie.status !== 'casting' || movie.castingCloseWeek <= state.week || busyIds.has(movie.id)) continue;
     if (EXPECTED_STAR[movie.budgetTier] > player.attributes.starPower + 15) continue;
     for (const role of movie.roles) {
-      if (role.castPersonId || role.roleType === 'Minor' || role.roleType === 'Extra') continue;
+      if (role.castPersonId || role.roleType === 'Minor' || role.roleType === 'Extra' || appliedRoleIds.has(role.id)) continue;
+      // Studios send names the parts a name would hear about — an Icon isn't offered indie bit work.
+      if (listingVisibility(player.attributes.starPower, movie.budgetTier, role.roleType) < 0.2) continue;
       if (role.genderPref !== 'any' && player.gender !== role.genderPref && player.gender !== 'nonbinary') continue;
       const age = ageInYears(player, state.week);
       if (age < role.ageMin - 4 || age > role.ageMax + 4) continue;
