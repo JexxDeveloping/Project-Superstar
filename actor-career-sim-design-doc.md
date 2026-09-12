@@ -1818,10 +1818,33 @@ I want movie box office verdicts (similar to how bollywood does it) once the mov
 * Blockbuster - the movie does more than double its budget
 * All-Time Blockbuster - the movie does three times its budget
 
-**[Designer note — to resolve at build, thresholds only; the labels above stand as the record]**
-The verdict labels above are the canonical set to use (they replace/operationalize the "COMMERCIAL RESULT LABELS" list in Part 1). Two things to lock down when implementing so bands don't overlap or leave gaps:
-1. The thresholds as written overlap and leave undefined ranges (e.g. "Flop ≤75%" then nothing defined between 75% and 110%; "Hit > 50% of budget" reads as >0.5× but likely means >1.5×; Super Hit "double" vs Blockbuster "more than double" need a clean boundary). I'll convert these into a strict, non-overlapping ladder of `gross ÷ budget` multipliers and confirm the exact cutoffs with you before finalizing.
-2. Decide whether the verdict compares gross to the **production budget only** or to **total recovery cost** (production + marketing). Real economics need roughly 2–2.5× production budget to break even because of marketing spend and the theater split, so a straight gross-to-budget ratio runs generous. Simple/Bollywood-style vs. realistic is a design call — flag which you want.
+**[Designer note — RESOLVED 2026-09-11 (Phase 4 design). The seven labels above stand as the record; "Average" keeps its name.]**
+
+The verdict measures **recoupment**, not raw gross against production budget. Gross-vs-budget is how people talk, but it can call a money-losing film a Hit (studios keep roughly half of gross, and marketing is paid on top). The Bollywood verdicts these labels come from are profit verdicts — "Hit" means the people who paid for the film made money — so the model follows that intent:
+
+```
+recoup = (worldwide gross × 0.8) / (production budget + marketing)
+```
+
+The single constant 0.8 folds in the theater split (~50% of gross) plus the ancillary revenue a studio counts on (home/streaming/TV, ~25–30% of theatrical). It is a tunable constant, deliberately not a sub-simulation. It reproduces the real rule of thumb automatically: a medium film with marketing ≈ budget breaks even near **2.5× budget**, a micro-indie with light marketing near **1.6×**, a tentpole near **2.4×** — tier-sensitivity for free, no per-tier curve.
+
+**Ladder (strict, non-overlapping, on `recoup`):**
+
+| Verdict | Recoup | Meaning |
+|---|---|---|
+| Disaster | < 0.40 | Lost most of the money |
+| Flop | 0.40 – 0.75 | Lost a lot |
+| Average | 0.75 – 1.10 | Roughly broke even, either side |
+| Hit | 1.10 – 1.50 | Clearly profitable |
+| Super Hit | 1.50 – 2.00 | Big profit |
+| Blockbuster | 2.00 – 3.00 | Returned double-plus |
+| All-Time Blockbuster | ≥ 3.00 **and** a magnitude gate | Historic |
+
+- **All-Time Blockbuster requires scale, not just ratio**: worldwide gross must rank among the biggest in the universe's recent history (e.g. top-10 of the last five years), so the bar rises as the industry's economy grows across a 50-year career and a tiny film tripling its cost is not an "all-timer".
+- **Same recoupment ⇒ same verdict** regardless of budget size. A $5M film that returned 2× its cost made its studio proportionally as happy as a $250M one. Magnitude is expressed through the top-rung gate and the headline gross, not a second ladder.
+- **No extra rungs.** Story colour comes from **tags** shown beside the verdict: *Sleeper* (grew after opening on word of mouth), *Cult seed* (high quality, commercial failure — the 5/5/1 cell), *Beat expectations* / *Missed expectations* (vs. pre-release tracking).
+- **Three numbers are tracked separately on every film**: worldwide gross (the headline), recoupment / estimated profit (the truth), and the verdict (the label). Career routing splits accordingly: **fame** (star power, fan popularity, records, news) follows gross; **trust** (studio relationship, momentum, rehire odds, franchise decisions) follows the verdict.
+- Accepted consequence: verdicts are truthfully harsher than the Phase 1 gross ladder (most films lose money theatrically; a Hit means something). The Phase 4 balance pass re-tunes the Commercial impacts so a break-even indie still advances a rookie through the fame channel.
 
 ---
 ---
