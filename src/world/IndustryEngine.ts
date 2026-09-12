@@ -60,6 +60,13 @@ const DIRECTOR_FILL: { tier: DirectorTier; count: number }[] = [
   { tier: 'new', count: 7 }, { tier: 'working', count: 11 }, { tier: 'established', count: 7 }, { tier: 'elite', count: 3 },
 ];
 
+/** Rebuild a studio row from its template (studio ids are fixed, so a lost row can be restored exactly). */
+export function studioFromTemplate(universeId: Id, id: Id): Studio | undefined {
+  const s = STUDIOS.find((t) => t.id === id);
+  if (!s) return undefined;
+  return { id: s.id, universeId, name: s.name, identity: s.identity, description: s.description, reputation: s.reputation, playerRelationship: 50, slateTarget: s.slateTarget, greenlitThisYear: 0 };
+}
+
 export interface UniverseSeed {
   studios: Studio[];
   directors: Director[];

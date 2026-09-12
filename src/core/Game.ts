@@ -16,7 +16,7 @@ import { seedFromString } from './RNG';
 import { advanceWeek } from './TimeEngine';
 import { EventBus } from './EventBus';
 import { ACTION_COSTS, createPlayer, type PlayerSpec } from '../sim/ActorEngine';
-import { seedUniverse } from '../world/IndustryEngine';
+import { seedUniverse, studioFromTemplate } from '../world/IndustryEngine';
 import { acceptOffer, applyBlockedReason, declineOffer, findListing, refreshListings, setPrep } from '../industry/AuditionEngine';
 import { attachPerson } from '../industry/MovieEngine';
 import { SAVE_VERSION, type SaveEngine } from '../meta/SaveEngine';
@@ -58,6 +58,14 @@ export function repairWorkingSet(state: GameState, ws: WorkingSet): number {
     return m ? Number(m[1]) : state.week;
   };
   for (const movie of ws.movies.values()) {
+    if (!ws.studios.has(movie.studioId)) {
+      const st = studioFromTemplate(state.universeId, movie.studioId);
+      if (st) {
+        ws.studios.set(st.id, st);
+        markDirty(ws, 'studios', st.id);
+        repaired += 1;
+      }
+    }
     if (!ws.directors.has(movie.directorId)) {
       const d = generateDirector(state.universeId, state.worldSeed, weekFromId(movie.directorId), movie.directorId, 'working', names);
       ws.directors.set(d.id, d);
@@ -72,6 +80,14 @@ export function repairWorkingSet(state: GameState, ws: WorkingSet): number {
       markDirty(ws, 'people', p.id);
       repaired += 1;
     }
+  }
+  // People and directors pointing at films that were lost.
+  for (const p of ws.people.values()) {
+    const kept = p.activeMovieIds.filter((id) => ws.movies.has(id));
+    if (kept.length !== p.activeMovieIds.length) { p.activeMovieIds = kept; markDirty(ws, 'people', p.id); repaired += 1; }
+  }
+  for (const d of ws.directors.values()) {
+    if (d.activeMovieId && !ws.movies.has(d.activeMovieId)) { d.activeMovieId = undefined; markDirty(ws, 'directors', d.id); repaired += 1; }
   }
   const before = state.listings.length + state.applications.length + state.trackedMovieIds.length;
   state.listings = state.listings.filter((l) => ws.movies.has(l.movieId));

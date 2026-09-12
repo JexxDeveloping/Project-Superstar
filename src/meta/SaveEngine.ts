@@ -175,7 +175,8 @@ export class SaveEngine {
   }
 
   /** Test hook: remove specific rows (simulates a save with holes). */
-  async deleteRows(rows: { directors?: Id[]; people?: Id[]; movies?: Id[] }): Promise<void> {
+  async deleteRows(rows: { directors?: Id[]; people?: Id[]; movies?: Id[]; studios?: Id[] }): Promise<void> {
+    if (rows.studios?.length) await this.db.studios.bulkDelete(rows.studios);
     if (rows.directors?.length) await this.db.directors.bulkDelete(rows.directors);
     if (rows.people?.length) await this.db.people.bulkDelete(rows.people);
     if (rows.movies?.length) await this.db.movies.bulkDelete(rows.movies);

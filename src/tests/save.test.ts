@@ -76,9 +76,13 @@ describe('SaveEngine — persistence under interleaving and repair', () => {
     const game = await Game.createAndSave({ player: spec, seed: 'repair-1', prehistoryWeeks: 20 }, save);
     const movie = [...game.ws.movies.values()].find((m) => m.cast.length > 0)!;
     // Punch holes the way the old race did: rows that never reached the DB.
-    await save.deleteRows({ directors: [movie.directorId], people: [movie.cast[0].personId] });
+    const lostMovie = [...game.ws.movies.values()].find((m) => m.id !== movie.id && m.status === 'filming')!;
+    await save.deleteRows({ directors: [movie.directorId], people: [movie.cast[0].personId], studios: [movie.studioId], movies: [lostMovie.id] });
     const loaded = (await Game.load(save, game.state.universeId))!;
     expect(loaded.ws.directors.has(movie.directorId)).toBe(true);
+    expect(loaded.ws.studios.has(movie.studioId)).toBe(true);
+    for (const p of loaded.ws.people.values()) expect(p.activeMovieIds).not.toContain(lostMovie.id);
+    for (const d of loaded.ws.directors.values()) expect(d.activeMovieId).not.toBe(lostMovie.id);
     expect(loaded.ws.people.has(movie.cast[0].personId)).toBe(true);
     // The repaired rows were persisted, so a second load is whole without repair.
     const again = (await Game.load(save, game.state.universeId))!;
