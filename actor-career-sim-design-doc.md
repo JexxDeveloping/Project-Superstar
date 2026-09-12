@@ -1846,6 +1846,75 @@ The single constant 0.8 folds in the theater split (~50% of gross) plus the anci
 - **Three numbers are tracked separately on every film**: worldwide gross (the headline), recoupment / estimated profit (the truth), and the verdict (the label). Career routing splits accordingly: **fame** (star power, fan popularity, records, news) follows gross; **trust** (studio relationship, momentum, rehire odds, franchise decisions) follows the verdict.
 - Accepted consequence: verdicts are truthfully harsher than the Phase 1 gross ladder (most films lose money theatrically; a Hit means something). The Phase 4 balance pass re-tunes the Commercial impacts so a break-even indie still advances a rookie through the fame channel.
 
+## ENTITY PROFILE PAGES
+
+Every actor, actress, director, writer, and movie generated in the universe has
+its own clickable profile page that displays that entity's full recorded history.
+This is the payoff of the persistent-world + Dexie design (Part 5): the data is
+already stored per entity; these pages are the views onto it. The goal is
+immersion — the player can click any name anywhere (cast lists, audition
+competition, news, the universe tables) and land on a real record with a real
+history.
+
+Universality: this applies to EVERY generated person and EVERY generated movie,
+not just notable ones. Pages render on demand from a single Dexie query for that
+entity, so it scales to thousands of records.
+
+Reachability: profile pages are the drill-down from the Part 3 universe People
+and Movies tables, and are linked from every place an entity's name appears
+(cast/crew lists, audition competitors, news items, filmographies). Clicking a
+name on one profile opens that entity's profile (movie -> cast member -> their
+filmography -> another movie, etc.).
+
+### PERSON PROFILE (actor / actress / director / writer)
+
+- Header: portrait/avatar, name, role label (e.g. Actor, Director, Writer), age.
+- Summary stats: Career Earnings, Cumulative Box Office, Overall rating,
+  Average Review (career critic average).
+- Ratings block (adapts to role type):
+  - Actors/actresses: per-genre acting skills (Drama, Action, Comedy, Romance,
+    etc.) plus core attributes (Star Power, Charisma, etc.), and Chemistry /
+    Content flags.
+  - Directors/writers: craft ratings (Directing, Leadership, Pacing, Style, etc.)
+    plus Star Power / reputation.
+- Filmography ("Movies"): paginated list of every film the entity worked on,
+  each row showing icon, title, release status or date, studio, that entity's
+  salary on the film, budget, review/critic score, box-office %, and box office.
+  For player characters, also show the player's 1-5 Performance (P) per film.
+- Awards: list of nominations/wins, or "No awards found" if none.
+
+
+### MOVIE PROFILE
+
+- Header: poster/icon, title, release (Week X, Year Y) or upcoming status, Critic
+  score (from Movie Quality, Part 2's Q axis), Box Office (total, the C axis),
+  and Studio.
+- Information: Plot (expandable summary), Type (animation/live-action), Genre(s),
+  Plot Arc, Rating, Runtime, and Franchise/Brand if part of one.
+- Box-office verdict: display the Part 3 verdict label (Disaster ... All-Time
+  Blockbuster) once the theatrical run is complete.
+- Writer: name + stats (box-office %, salary, movie count, avg review, cumulative
+  box office), linking to that person's profile.
+- Director: same treatment.
+- Cast: each member with name, role type (Leading Actor/Actress, Supporting,
+  etc.), box-office %, salary, movie count, review, and box office, each linking
+  to that person's profile.
+- Awards: list, or "No awards found."
+- Budget breakdown: Pre-production (writer), Production (cast, director),
+  Post-production (marketing), allocated box-office %, and totals shown both
+  without ads and with ads (production cost vs. total cost).
+- Box office: week-by-week gross for the full theatrical run, First Week and
+  Total figures, and a bar chart of the weekly decline (ECharts).
+
+### DATA REQUIREMENT
+
+These pages display history, not snapshots, so the underlying data must be
+accumulated as the simulation runs (starting Phase 2), not recomputed at view
+time: each movie stores its weekly box-office array and final verdict; each
+person stores their per-film record, cumulative gross, career earnings, and
+running average review. If this history is persisted to each entity's Dexie
+record as it happens, these pages are pure read-only views built in Phase 7.
+
 ---
 ---
 
@@ -1859,7 +1928,8 @@ The 14-step content order in Part 1 remains the reference. This is the practical
 4. Box office engine (the hard math) + release calendar competition.
 5. Perception, typecasting, rivalries, relationships, news.
 6. Awards, finances, milestones, scandals.
-7. UI polish + saves + tutorial + the two universe tables (People, Movies).
+   *Note for phases 2–6:* Persist per-entity history as it is generated (each movie's weekly box office, each person's per-film result, cumulative gross, avg review) to the entity's Dexie record — do not compute-and-discard. Required by the Entity Profile Pages in Part 3.
+7. UI polish + saves + tutorial + the two universe tables (People, Movies) + entity profile pages (people + movies), drill-down from the universe tables.
 8. Tune via simulated careers (original step 14) — run headless 40-year sims and check the economy/box-office distributions before calling it done.
 
 ---
