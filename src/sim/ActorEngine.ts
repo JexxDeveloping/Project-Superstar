@@ -180,7 +180,7 @@ export const ACTION_COSTS = {
   acting_class: { cash: 150, energy: 15, stress: 4 },
   genre_training: { cash: 100, energy: 15, stress: 3 },
   prepare_role: { cash: 0, energy: 15, stress: 2 },
-  rest: { cash: 0, energy: -30, stress: -18 },
+  rest: { cash: 0, energy: -45, stress: -18 },
   apply: { cash: 0, energy: 4, stress: 2 },
   read_script: { cash: 0, energy: 5, stress: 0 },
 } as const;
