@@ -5,7 +5,8 @@
   import { describeTerms } from '../industry/ContractEngine';
   import { GENRES, type Genre, type PlannedAction } from '../core/GameState';
   import { formatDate } from '../core/TimeEngine';
-  import { ACTION_COSTS, DAY_JOB_INCOME, starTier } from '../sim/ActorEngine';
+  import { ACTION_COSTS, starTier } from '../sim/ActorEngine';
+  import DayJobPanel from './DayJobPanel.svelte';
   import { formatMoney } from '../industry/BoxOfficeEngine';
 
   const s = $derived(store.state!);
@@ -55,7 +56,7 @@
         {#each topGenres as g}<span class="tag">{g} {Math.round(p.genres[g])}</span>{/each}
       </div>
       <div class="muted tiny" style="margin-top:8px">{p.background} · {p.archetype} · Earnings {formatMoney(p.careerEarnings)} · XP {p.xp}</div>
-      <div class="muted tiny">Rent ${s.weeklyExpenses}/wk · day job +${DAY_JOB_INCOME}/wk between shoots</div>
+      <div class="muted tiny">Rent ${s.weeklyExpenses}/wk</div>
     </section>
 
     <section class="panel">
@@ -67,7 +68,7 @@
           <select bind:value={trainingGenre} class="small-select">{#each GENRES as g}<option value={g}>{g}</option>{/each}</select>
           <button class="small" onclick={() => store.plan({ type: 'genre_training', genre: trainingGenre })} disabled={store.actionsRemaining === 0}>Train genre <span class="muted">$100</span></button>
         </span>
-        <button class="small" onclick={() => store.plan({ type: 'prepare_role' })} disabled={store.actionsRemaining === 0}>Prepare for role</button>
+        <button class="small" onclick={() => store.plan({ type: 'prepare_role' })} disabled={store.actionsRemaining === 0 || !(s.activeProduction || inFlight.some((a) => a.status === 'booked'))} title={s.activeProduction || inFlight.some((a) => a.status === 'booked') ? 'Deepen the work on your booked role' : 'Nothing to prepare for yet — book a role first'}>Prepare for role</button>
         <button class="small ghost" onclick={() => (store.screen = 'auditions')}>Apply to auditions ▸</button>
       </div>
       {#if s.weekPlan.length > 0}
@@ -80,6 +81,8 @@
         <p class="muted small-text" style="margin-top:8px">Nothing planned. Unplanned weeks still recover a little energy.</p>
       {/if}
     </section>
+
+    <DayJobPanel />
 
     <section class="panel">
       <div class="panel-head"><h3>Current project</h3></div>

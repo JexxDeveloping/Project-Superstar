@@ -4,7 +4,7 @@
  * Operates purely on the in-memory state handed to it. Emits what happened via the tick's EventBus.
  */
 import {
-  GENRES, clamp, type Archetype, type Attributes, type Background, type Gender, type Genre,
+  GENRES, clamp, type Archetype, type Attributes, type Background, type DayJobId, type Gender, type Genre,
   type GenreSkills, type Person, type PlannedAction, type GameState, type Id,
 } from '../core/GameState';
 import { rngFor } from '../core/RNG';
@@ -185,8 +185,19 @@ export const ACTION_COSTS = {
   read_script: { cash: 0, energy: 5, stress: 0 },
 } as const;
 
-/** Bartending, temping, whatever pays: idle weeks bring in a little so a slow start isn't a debt spiral. */
-export const DAY_JOB_INCOME = 200;
+/**
+ * Day jobs: standing part-time work between shoots. Each covers the rent with something left over,
+ * at a weekly energy cost. On hold (no pay, no cost) while the player is on a set.
+ */
+export interface DayJob { id: DayJobId; name: string; pay: number; energy: number; stress: number; blurb: string }
+export const DAY_JOBS: DayJob[] = [
+  { id: 'cafe', name: 'Café shifts', pay: 350, energy: 15, stress: 1, blurb: 'Mornings on the espresso machine. Easy hours, small tips.' },
+  { id: 'bar', name: 'Bartending nights', pay: 450, energy: 20, stress: 2, blurb: 'Late nights, better money, and you meet people.' },
+  { id: 'warehouse', name: 'Warehouse shifts', pay: 550, energy: 25, stress: 3, blurb: 'Heavy lifting, best pay, leaves little in the tank.' },
+];
+export function dayJobById(id: DayJobId | null | undefined): DayJob | undefined {
+  return id ? DAY_JOBS.find((j) => j.id === id) : undefined;
+}
 export const PREP_ROLE_BONUS = 3;
 export const PREP_ROLE_CAP = 9;
 
@@ -280,8 +291,14 @@ export function resolvePlayerWeek(state: GameState, bus: EventBus): void {
   p.attributes.fanPopularity = clamp(p.attributes.fanPopularity - fade * 0.8, 1, 100);
   if (p.attributes.starPower > p.peakStarPower) p.peakStarPower = p.attributes.starPower;
 
-  // Living expenses, offset by a day job in weeks you're not on a set.
-  if (!state.activeProduction) p.cash += DAY_JOB_INCOME;
+  // The day job, in weeks you're not on a set.
+  const job = dayJobById(state.dayJob);
+  if (job && !state.activeProduction) {
+    p.cash += job.pay;
+    p.energy = clamp(p.energy - job.energy, 0, 100);
+    p.stress = clamp(p.stress + job.stress, 0, 100);
+  }
+  // Living expenses.
   p.cash -= state.weeklyExpenses;
   if (p.cash < 0 && p.cash + state.weeklyExpenses >= 0) {
     bus.emit('finance', 'Out of cash', 'Rent came due and the account went into the red. Book work soon.');

@@ -17,14 +17,18 @@ function playUntilResult(seed: string, maxWeeks = 400): { result: MovieResult; w
       if (app.status === 'audition_pending' && !app.prep) game.choosePrep(app.listingId, 'Practice Scene');
       if (app.status === 'offer') { try { game.acceptOffer(app.listingId); } catch { game.declineOffer(app.listingId); } }
     }
+    // The café job costs energy every week; a sensible rookie rests first (and quits it once solvent).
+    if (s.dayJob && s.player.cash > 6_000) game.quitDayJob();
+    if (s.player.energy < 60 || s.player.stress > 60) game.planAction({ type: 'rest' });
     for (const l of s.listings) {
       if (game.actionsRemaining === 0) break;
       try { game.planAction({ type: 'apply', listingId: l.id }); } catch { /* blocked: fine */ }
     }
-    if (game.actionsRemaining > 0 && (s.player.energy < 45 || s.player.stress > 60)) game.planAction({ type: 'rest' });
+    // Spare actions: a class when rested and solvent, a prep week only when there's a role to prep, else nothing.
     while (game.actionsRemaining > 0) {
-      if (s.player.cash > 1000) game.planAction({ type: 'acting_class' });
-      else game.planAction({ type: 'prepare_role' });
+      if (s.player.cash > 1000 && s.player.energy > 70) game.planAction({ type: 'acting_class' });
+      else if (s.activeProduction || s.applications.some((a) => a.status === 'booked')) game.planAction({ type: 'prepare_role' });
+      else break;
     }
     game.endWeek();
     if (s.pendingResults.length > 0) return { result: s.pendingResults[0], weeks: i + 1, game };

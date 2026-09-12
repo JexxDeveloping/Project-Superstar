@@ -29,7 +29,8 @@ function playYears(seed: string, years: number) {
     }
     const ranked = s.listings.slice().sort((a, b) => ROLE_RANK.indexOf(b.roleType) - ROLE_RANK.indexOf(a.roleType));
     for (const l of ranked) { if (game.actionsRemaining <= 1) break; try { game.planAction({ type: 'apply', listingId: l.id }); } catch { /* blocked */ } }
-    if (game.actionsRemaining > 0 && (p.energy < 50 || p.stress > 55)) game.planAction({ type: 'rest' });
+    if (s.dayJob && p.cash > 15_000) game.quitDayJob(); // day job until the acting pays
+    if (game.actionsRemaining > 0 && (p.energy < 60 || p.stress > 55)) game.planAction({ type: 'rest' });
     while (game.actionsRemaining > 0) {
       if (!s.activeProduction && p.cash > 2000) { try { game.planAction({ type: 'acting_class' }); continue; } catch { /* cash */ } }
       game.planAction({ type: 'prepare_role' });

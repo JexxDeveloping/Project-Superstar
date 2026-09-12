@@ -8,7 +8,7 @@ import { computePayout, counterAvailable, counterOffer, generateOffer, salaryGui
 import { callbackProbability, directOfferChance, findDirectOffer, trackRecord } from '../industry/CastingEngine';
 import { agentEffects, hireAgent, hireBlockedReason } from '../world/AgentEngine';
 import { attachPerson, tickCancellations } from '../industry/MovieEngine';
-import { DAY_JOB_INCOME } from '../sim/ActorEngine';
+import { DAY_JOBS, dayJobById } from '../sim/ActorEngine';
 import { EventBus } from '../core/EventBus';
 
 const spec = { firstName: 'Deal', lastName: 'Maker', gender: 'female' as const, background: 'Film Student' as const, archetype: 'Dramatic Performer' as const };
@@ -257,7 +257,7 @@ describe('Scripts, head-to-head, cancellations, pay-or-play', () => {
     expect(paid.id).not.toBe(unpaid.id);
     expect(s.trackedMovieIds).toEqual([]);
     expect(s.player.activeMovieIds).toEqual([]);
-    expect(s.player.cash).toBe(cashBefore - s.weeklyExpenses + DAY_JOB_INCOME + 5_000);
+    expect(s.player.cash).toBe(cashBefore - s.weeklyExpenses + dayJobById(s.dayJob)!.pay + 5_000);
     expect(s.weeklyReport.some((e) => e.title.includes('get paid anyway'))).toBe(true);
     expect(s.weeklyReport.some((e) => e.description.includes('No shoot, no paycheck'))).toBe(true);
     void tickCancellations; void EventBus;
@@ -268,16 +268,31 @@ describe('Scripts, head-to-head, cancellations, pay-or-play', () => {
 });
 
 describe('Rookie economy', () => {
-  it('a day job covers most of the rent between shoots; nothing while on a set', () => {
+  it('every day job covers the rent with cash to spare; it pauses on a set; you can quit', () => {
+    for (const j of DAY_JOBS) {
+      expect(j.pay - 250).toBeGreaterThanOrEqual(100);
+      expect(j.energy).toBeGreaterThanOrEqual(15);
+      expect(j.energy).toBeLessThanOrEqual(25);
+    }
     const game = Game.create({ player: spec, seed: 'economy-1', prehistoryWeeks: 20 });
     const s = game.state;
+    expect(s.dayJob).toBe('cafe');
     const before = s.player.cash;
-    game.planAction({ type: 'rest' });
+    const energyBefore = s.player.energy;
+    game.planAction({ type: 'prepare_role' });
     game.endWeek();
-    expect(s.player.cash).toBe(before - s.weeklyExpenses + DAY_JOB_INCOME);
-    // Twenty idle weeks: a slow drift, never a spiral.
-    for (let i = 0; i < 20; i++) { game.planAction({ type: 'rest' }); game.endWeek(); }
-    expect(s.player.cash).toBeGreaterThan(before - 21 * 60);
+    expect(s.player.cash).toBe(before - s.weeklyExpenses + dayJobById('cafe')!.pay);
+    expect(s.player.energy).toBeLessThan(energyBefore);
+    game.takeDayJob('warehouse');
+    const c2 = s.player.cash;
+    game.planAction({ type: 'prepare_role' }); game.endWeek();
+    expect(s.player.cash).toBe(c2 - s.weeklyExpenses + 550);
+    game.quitDayJob();
+    expect(s.dayJob).toBeNull();
+    const c3 = s.player.cash;
+    game.planAction({ type: 'prepare_role' }); game.endWeek();
+    expect(s.player.cash).toBe(c3 - s.weeklyExpenses);
+    game.takeDayJob('bar');
     // On a set there is no day job (the salary is the income).
     const { movie, role } = castingMovie(game);
     attachPerson(game.ws, movie, s.player, role, 5_000);

@@ -8,7 +8,7 @@
 import { Game, type NewGameOptions } from '../core/Game';
 import { SaveEngine, type SaveSlotMeta } from '../meta/SaveEngine';
 import type {
-  Agent, CounterMove, Director, GameState, Id, Movie, NegotiationEvent, Person, PlannedAction, PrepChoice, Studio,
+  Agent, CounterMove, DayJobId, Director, GameState, Id, Movie, NegotiationEvent, Person, PlannedAction, PrepChoice, Studio,
 } from '../core/GameState';
 
 export interface WorldView {
@@ -129,6 +129,8 @@ class GameStore {
     this.command(() => { this.lastNegotiation = this.game!.counterOffer(listingId, move); });
   }
   hireAgent(agentId: Id): void { this.command(() => this.game!.hireAgent(agentId)); }
+  takeDayJob(id: DayJobId): void { this.command(() => this.game!.takeDayJob(id)); }
+  quitDayJob(): void { this.command(() => this.game!.quitDayJob()); }
   fireAgent(): void { this.command(() => this.game!.fireAgent()); }
   declineApproach(agentId: Id): void { this.command(() => this.game!.declineApproach(agentId)); }
 

@@ -453,6 +453,8 @@ export interface Production {
   prepBonus: number;
 }
 
+export type DayJobId = 'cafe' | 'bar' | 'warehouse';
+
 export type PlannedAction =
   | { type: 'rest' }
   | { type: 'acting_class' }
@@ -494,6 +496,8 @@ export interface GameState {
   weeklyReport: TimelineEvent[];
   timeline: TimelineEvent[];
   weeklyExpenses: number;
+  /** Standing part-time work between shoots; null when the player has quit. */
+  dayJob: DayJobId | null;
   /** Counter so procedurally generated ids stay unique and seeds stable. */
   genCounter: number;
   /** The agent roster for this universe (small; lives in hot state). */

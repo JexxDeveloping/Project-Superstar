@@ -15,12 +15,12 @@ import {
 import { seedFromString } from './RNG';
 import { advanceWeek } from './TimeEngine';
 import { EventBus } from './EventBus';
-import { ACTION_COSTS, createPlayer, type PlayerSpec } from '../sim/ActorEngine';
+import { ACTION_COSTS, createPlayer, dayJobById, type PlayerSpec } from '../sim/ActorEngine';
 import { seedUniverse, studioFromTemplate } from '../world/IndustryEngine';
 import { acceptOffer, applyBlockedReason, declineOffer, findApplication, findListing, readScriptBlockedReason, refreshListings, setPrep } from '../industry/AuditionEngine';
 import { counterOffer } from '../industry/ContractEngine';
 import { fireAgent, generateAgents, hireAgent } from '../world/AgentEngine';
-import type { CounterMove, NegotiationEvent } from './GameState';
+import type { CounterMove, DayJobId, NegotiationEvent } from './GameState';
 import { attachPerson } from '../industry/MovieEngine';
 import { SAVE_VERSION, type SaveEngine } from '../meta/SaveEngine';
 import { generateActor, takenNames } from '../sim/NPCEngine';
@@ -147,6 +147,7 @@ export class Game {
       weeklyReport: [],
       timeline: [],
       weeklyExpenses: WEEKLY_EXPENSES,
+      dayJob: 'cafe',
       genCounter: seed.genCounter,
       agents: generateAgents(universeId, worldSeed),
       agentApproaches: [],
@@ -160,7 +161,7 @@ export class Game {
     refreshListings(state, ws, bus);
     state.weeklyReport = [{
       week: state.week, category: 'time', title: 'Welcome to the industry',
-      description: `${player.firstName} ${player.lastName}, ${opts.player.background}, arrives with $${player.cash.toLocaleString()} and a dream. A day job covers most of the rent between shoots. Apply to auditions, train, and end the week.`,
+      description: `${player.firstName} ${player.lastName}, ${opts.player.background}, arrives with $${player.cash.toLocaleString()}, a dream, and café shifts that cover the rent between shoots. Apply to auditions, train, and end the week.`,
     }, ...bus.events()];
     state.timeline.push(...state.weeklyReport);
     return new Game(state, ws, save);
@@ -180,6 +181,7 @@ export class Game {
     const ws = await save.loadWorkingSet(universeId);
     // The hot player copy is authoritative; keep the table's row pointing at the same object.
     ws.people.set(state.player.id, state.player);
+    if (state.dayJob === undefined) state.dayJob = null;
     const game = new Game(state, ws, save);
     const repaired = repairWorkingSet(state, ws);
     game.repairedOnLoad = repaired;
@@ -278,6 +280,21 @@ export class Game {
 
   fireAgent(): void {
     fireAgent(this.state);
+  }
+
+  takeDayJob(id: DayJobId): void {
+    const job = dayJobById(id);
+    if (!job) throw new Error('No such job.');
+    if (this.state.dayJob === id) throw new Error('You already work there.');
+    this.state.dayJob = id;
+    this.state.weeklyReport.push({ week: this.state.week, category: 'finance', title: `Started ${job.name.toLowerCase()}`, description: `$${job.pay}/week for ${job.energy} energy. On hold whenever you're on a set.` });
+  }
+
+  quitDayJob(): void {
+    const job = dayJobById(this.state.dayJob);
+    if (!job) throw new Error('You have no day job to quit.');
+    this.state.dayJob = null;
+    this.state.weeklyReport.push({ week: this.state.week, category: 'finance', title: `Quit ${job.name.toLowerCase()}`, description: `Rent is $${this.state.weeklyExpenses}/week with nothing coming in between shoots.` });
   }
 
   declineApproach(agentId: Id): void {
