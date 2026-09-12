@@ -266,3 +266,40 @@ describe('Scripts, head-to-head, cancellations, pay-or-play', () => {
     expect(next.movie.status).toBe('casting');
   });
 });
+
+describe('Rookie economy', () => {
+  it('a day job covers most of the rent between shoots; nothing while on a set', () => {
+    const game = Game.create({ player: spec, seed: 'economy-1', prehistoryWeeks: 20 });
+    const s = game.state;
+    const before = s.player.cash;
+    game.planAction({ type: 'rest' });
+    game.endWeek();
+    expect(s.player.cash).toBe(before - s.weeklyExpenses + DAY_JOB_INCOME);
+    // Twenty idle weeks: a slow drift, never a spiral.
+    for (let i = 0; i < 20; i++) { game.planAction({ type: 'rest' }); game.endWeek(); }
+    expect(s.player.cash).toBeGreaterThan(before - 21 * 60);
+    // On a set there is no day job (the salary is the income).
+    const { movie, role } = castingMovie(game);
+    attachPerson(game.ws, movie, s.player, role, 5_000);
+    s.applications.push({ listingId: `l-${role.id}`, movieId: movie.id, roleId: role.id, movieTitle: movie.title, characterName: role.characterName, roleType: role.roleType, appliedWeek: s.week, status: 'booked', source: 'audition' });
+    s.trackedMovieIds.push(movie.id);
+    for (const r of movie.roles) if (!r.castPersonId) r.castPersonId = 'ghost';
+    movie.status = 'pre-production'; movie.productionStartWeek = s.week + 1;
+    game.planAction({ type: 'rest' }); game.endWeek(); // shoot starts
+    expect(s.activeProduction?.movieId).toBe(movie.id);
+    const onSet = s.player.cash;
+    game.planAction({ type: 'prepare_role' }); game.endWeek();
+    expect(s.player.cash).toBe(onSet - s.weeklyExpenses);
+  });
+
+  it('the board quotes the same salary the contract opens near', () => {
+    const game = Game.create({ player: spec, seed: 'economy-2', prehistoryWeeks: 20 });
+    const s = game.state;
+    for (const l of s.listings) {
+      const movie = game.ws.movies.get(l.movieId)!;
+      const role = movie.roles.find((r) => r.id === l.roleId)!;
+      expect(l.expectedSalary).toBe(salaryGuideline(s.player.attributes.starPower, role));
+      expect(l.expectedSalary).toBeGreaterThanOrEqual(600);
+    }
+  });
+});

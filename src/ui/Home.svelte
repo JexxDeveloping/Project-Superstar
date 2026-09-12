@@ -119,7 +119,7 @@
               <div class="muted tiny">Shoot {m ? formatDate(m.productionStartWeek, s.epochYear) : ''} · {m?.productionWeeks} wks · lapses {o.offerExpiresWeek !== undefined ? formatDate(o.offerExpiresWeek, s.epochYear) : ''}</div>
               <div class="row" style="margin-top:4px">
                 <button class="small danger ghost" onclick={() => store.declineOffer(o.listingId)}>Decline</button>
-                <button class="small primary" onclick={() => (store.openContractListingId = o.listingId)}>Negotiate / sign ▸</button>
+                <button class="small primary" onclick={() => store.openContract(o.listingId)}>Negotiate / sign ▸</button>
               </div>
             </div>
           {/each}

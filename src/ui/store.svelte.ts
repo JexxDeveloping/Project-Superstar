@@ -55,6 +55,7 @@ class GameStore {
     await this.run(async () => {
       this.game = await Game.createAndSave(opts, this.save);
       this.screen = 'home';
+      this.openListingId = null; this.openContractListingId = null; this.lastNegotiation = null;
       this.refresh();
     });
   }
@@ -67,6 +68,7 @@ class GameStore {
       if (!game) throw new Error('That save could not be loaded.');
       this.game = game;
       this.screen = 'home';
+      this.openListingId = null; this.openContractListingId = null; this.lastNegotiation = null;
       this.refresh();
       if (game.repairedOnLoad > 0) this.showError(`Save repaired: ${game.repairedOnLoad} missing record${game.repairedOnLoad === 1 ? '' : 's'} rebuilt.`);
     });
@@ -129,6 +131,13 @@ class GameStore {
   hireAgent(agentId: Id): void { this.command(() => this.game!.hireAgent(agentId)); }
   fireAgent(): void { this.command(() => this.game!.fireAgent()); }
   declineApproach(agentId: Id): void { this.command(() => this.game!.declineApproach(agentId)); }
+
+  /** Open the contract modal for a live offer (clears any reply left over from an earlier deal). */
+  openContract(listingId: Id): void {
+    this.lastNegotiation = null;
+    this.openListingId = null;
+    this.openContractListingId = listingId;
+  }
 
   agent(): Agent | undefined {
     const s = this.state;
