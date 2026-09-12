@@ -1843,10 +1843,10 @@ recoup          = (theatrical take + afterlife) / (production budget + marketing
 | Hit | 1.10 – 1.50 | Clearly profitable |
 | Super Hit | 1.50 – 2.00 | Big profit |
 | Blockbuster | 2.00 – 3.00 | Returned double-plus |
-| All-Time Blockbuster | ≥ 3.00 **and** worldwide gross ≥ $100M | Historic |
+| All-Time Blockbuster | ≥ 3.00 **and** a magnitude gate | Historic |
 
-- **All-Time Blockbuster requires scale, not just ratio**: a fixed **gross floor of $100M worldwide** (decision of record, 2026-09-12), so a tiny film tripling its cost is not an "all-timer". The floor is a tunable constant; whether it should rise with the universe's economy over a 50-year career is a Phase 8 calibration question.
-- **Same recoupment ⇒ same verdict** regardless of budget size. A $5M film that returned 2× its cost made its studio proportionally as happy as a $250M one. Magnitude is expressed through the top-rung gross floor and the headline gross, not a second ladder.
+- **All-Time Blockbuster requires scale, not just ratio**: worldwide gross must rank among the biggest in the universe's recent history — **top-10 of the last five years** — so the bar rises as the industry's economy grows across a 50-year career, the label stays rare by construction (roughly two films a year at most), and a tiny film tripling its cost is not an "all-timer". *(Confirmed 2026-09-12 after considering, and rejecting, a fixed $100M floor: a fixed floor becomes routine once tentpoles gross $500M+.)*
+- **Same recoupment ⇒ same verdict** regardless of budget size. A $5M film that returned 2× its cost made its studio proportionally as happy as a $250M one. Magnitude is expressed through the top-rung gate and the headline gross, not a second ladder.
 - **No extra rungs.** Story colour comes from **tags** shown beside the verdict: *Sleeper* (grew after opening on word of mouth), *Cult seed* (high quality, commercial failure — the 5/5/1 cell), *Beat expectations* / *Missed expectations* (vs. pre-release tracking).
 - **Three numbers are tracked separately on every film**: worldwide gross (the headline), recoupment / estimated profit (the truth), and the verdict (the label). Career routing splits accordingly: **fame** (star power, fan popularity, records, news) follows gross; **trust** (studio relationship, momentum, rehire odds, franchise decisions) follows the verdict.
 - Accepted consequence: verdicts are truthfully harsher than the Phase 1 gross ladder (most films lose money theatrically; a Hit means something). The Phase 4 balance pass re-tunes the Commercial impacts so a break-even indie still advances a rookie through the fame channel.
@@ -1899,7 +1899,7 @@ A 52-week market-size table per market. Domestic peaks at July 4 (~1.4×), Thank
 
 ### Verdict
 
-The recoupment formula in the Box Office Verdicts section above (theatrical take dom 0.50 / intl 0.40 plus the audience- and genre-driven afterlife, over budget + marketing; ladder Disaster < 0.40 · Flop 0.40–0.75 · Average 0.75–1.10 · Hit 1.10–1.50 · Super Hit 1.50–2.00 · Blockbuster 2.00–3.00 · All-Time Blockbuster ≥ 3.00 **and** worldwide gross ≥ $100M). Fame routes off gross; trust routes off verdict. Tags: Sleeper, Cult seed, Beat/Missed expectations.
+The recoupment formula in the Box Office Verdicts section above (theatrical take dom 0.50 / intl 0.40 plus the audience- and genre-driven afterlife, over budget + marketing; ladder Disaster < 0.40 · Flop 0.40–0.75 · Average 0.75–1.10 · Hit 1.10–1.50 · Super Hit 1.50–2.00 · Blockbuster 2.00–3.00 · All-Time Blockbuster ≥ 3.00 **and** a top-10-of-the-last-five-years worldwide gross). Fame routes off gross; trust routes off verdict. Tags: Sleeper, Cult seed, Beat/Missed expectations.
 
 ### Behaviours that must be possible (verified, not assumed)
 
