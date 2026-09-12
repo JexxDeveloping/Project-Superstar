@@ -104,7 +104,7 @@ class GameStore {
   async skipToEvent(): Promise<void> {
     await this.run(async () => {
       const game = this.game!;
-      if (needsPlayer(game.state) && !game.state.weeklyReport.some((e) => e.category === 'release' || e.title.includes('starts filming') || e.title.includes('wraps') || e.title.includes('opening weekend'))) {
+      if (needsPlayer(game.state) && !game.state.weeklyReport.some((e) => e.category === 'release' || e.title.includes('starts filming') || e.title.includes('wraps') || / opens #\d/.test(e.title) || e.title.startsWith('Tracking:'))) {
         throw new Error('Something needs your answer first — an audition to prepare, an offer, or an agent. Use End Week to advance anyway.');
       }
       await this.persistChain;
@@ -217,7 +217,7 @@ function needsPlayer(s: GameState): boolean {
   if (s.agentApproaches.length > 0 && s.weeklyReport.some((e) => e.category === 'agent')) return true;
   return s.weeklyReport.some((e) =>
     e.category === 'result' || e.category === 'casting' || e.category === 'release' ||
-    e.title.startsWith('Callback') || e.title.includes('starts filming') || e.title.includes('wraps') || e.title.includes('opening weekend'));
+    e.title.startsWith('Callback') || e.title.includes('starts filming') || e.title.includes('wraps') || / opens #\d/.test(e.title) || e.title.startsWith('Tracking:'));
 }
 
 function nothingInMotion(s: GameState): boolean {

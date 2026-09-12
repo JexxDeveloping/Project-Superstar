@@ -4,7 +4,7 @@
  * Entirely seeded; the same inputs produce the same movie.
  */
 import {
-  BUDGET_TIERS, clamp, type BudgetTier, type Director, type Gender, type Genre, type Id, type Movie,
+  BUDGET_TIERS, clamp, type BudgetTier, type Director, type Gender, type Genre, type Id, type Movie, type MovieRating, type MovieType,
   type Role, type RoleType, type Studio, type StudioIdentity,
 } from '../core/GameState';
 import { rngFor, type Rng } from '../core/RNG';
@@ -193,12 +193,102 @@ export interface MovieGenInput {
   /** Force a tier (used when seeding the opening universe). */
   tier?: BudgetTier;
   genres?: Genre[];
+  /** Genre popularity right now (slates bend toward what's hot). */
+  trends?: Partial<Record<Genre, number>>;
 }
 
-export function pickTierAndGenres(rng: Rng, studio: Studio): { tier: BudgetTier; genres: Genre[] } {
+// ---------------------------------------------------------------------------
+// Marketing — a per-film studio decision, not a fixed ratio
+// ---------------------------------------------------------------------------
+
+/** How each kind of studio spends relative to the tier norm. */
+const IDENTITY_SPEND: Record<StudioIdentity, number> = { blockbuster: 1.1, prestige: 0.95, comedy: 1.0, mainstream: 1.0, indie: 0.8, genre: 1.0 };
+
+/**
+ * The campaign the studio commits to at greenlight: the tier norm, the studio's habits, how
+ * commercial the project looks, and a seeded call — heavy / normal / minimal. Re-sized at wrap
+ * once the film has been seen (ReleaseCalendarEngine.scheduleRelease).
+ */
+export function decideMarketing(rng: Rng, studio: Pick<Studio, 'identity'>, tier: BudgetTier, budget: number, commercialPotential: number): number {
+  const lean = (commercialPotential - 50) / 100; // −0.4 … +0.46
+  const size = rng.weighted([
+    { item: 1.35, weight: 20 + lean * 40 },
+    { item: 1.0, weight: 55 },
+    { item: 0.6, weight: 25 - lean * 40 },
+  ]);
+  const spend = budget * MARKETING_RATIO[tier] * IDENTITY_SPEND[studio.identity] * size * rng.multiplier(0.1);
+  const step = spend >= 10_000_000 ? 500_000 : spend >= 1_000_000 ? 50_000 : 5_000;
+  return Math.max(step, Math.round(spend / step) * step);
+}
+
+// ---------------------------------------------------------------------------
+// Metadata for the movie profile page
+// ---------------------------------------------------------------------------
+
+const PLOT_ARCS = ['Rise and fall', 'Redemption', 'The quest', 'Revenge', 'Coming of age', 'Underdog', 'The heist', 'Survival', 'Forbidden love', 'The unravelling', 'Rags to riches', 'Tragedy', 'Fish out of water', 'Second chance'];
+
+const PROTAGONISTS: Partial<Record<Genre, string[]>> = {
+  Action: ['a burned-out operative', 'a disgraced soldier', 'a getaway driver', 'a bodyguard with one job left'],
+  Comedy: ['a hopeless best man', 'two feuding neighbours', 'a substitute teacher', 'a wedding planner on her last nerve'],
+  Drama: ['a widowed schoolteacher', 'an estranged son', 'a nurse on night shift', 'a failing novelist'],
+  Romance: ['a florist who has sworn off love', 'two strangers sharing a train compartment', 'a chef and her harshest critic'],
+  Horror: ['a family in a new house', 'four students on a road trip', 'a night-shift caretaker', 'a small-town sheriff'],
+  Thriller: ['a whistleblower', 'a court stenographer', 'a pilot who saw too much', 'an insurance investigator'],
+  Crime: ['a mid-level fixer', 'a detective one week from retirement', 'a bookkeeper for the wrong people'],
+  Mystery: ['a retired inspector', 'a true-crime podcaster', 'a lighthouse keeper', 'an archivist'],
+  Fantasy: ['an orphaned map-maker', 'the last of the river guardians', 'a thief with a stolen crown'],
+  'Science Fiction': ['a cargo pilot on a dying ship', 'a memory technician', 'a colony doctor', 'a decommissioned android'],
+  Historical: ['a court painter', 'a field surgeon', 'a queen\'s translator', 'a railway engineer'],
+  Musical: ['a church choir director', 'a washed-up crooner', 'three sisters with one microphone'],
+  Sports: ['an ageing boxer', 'a small-town relay team', 'a rookie goalkeeper', 'a swimmer banned from the pool'],
+  Family: ['a boy and a very large dog', 'a girl who can talk to weather', 'twins who swap schools'],
+  Western: ['a bounty hunter', 'a widow defending her land', 'a marshal without a town'],
+};
+const GOALS: Partial<Record<Genre, string[]>> = {
+  Action: ['must pull one last job', 'has 48 hours to clear their name', 'is hunted across three borders'],
+  Comedy: ['must survive a week with the in-laws', 'accidentally becomes famous', 'fakes a job to keep a flat'],
+  Drama: ['returns home for a funeral that reopens everything', 'takes in a stranger\'s child', 'faces the year that changed the family'],
+  Romance: ['makes a bet they can\'t keep', 'falls for the person they were sent to ruin', 'gets one summer to say it'],
+  Horror: ['discovers the house remembers', 'wakes something in the woods', 'learns why the town never leaves the lights on'],
+  Thriller: ['has proof that someone wants buried', 'must find out who is inside the house', 'is framed for a crash that wasn\'t an accident'],
+  Crime: ['is offered a way out that isn\'t one', 'has to move the money before dawn', 'realises the crew has a leak'],
+  Mystery: ['reopens the case everyone wanted closed', 'finds a body that shouldn\'t exist', 'follows a letter forty years late'],
+  Fantasy: ['must return a stolen crown before the tide turns', 'wakes the old kingdom', 'is chosen for a war that isn\'t theirs'],
+  'Science Fiction': ['has one orbit to fix what the crew broke', 'learns the colony has been lying', 'is asked to erase a life'],
+  Historical: ['is caught between two courts', 'carries a message across a war', 'records what the powerful want forgotten'],
+  Musical: ['has one night to save the theatre', 'writes the song that could end a feud', 'gets a second shot at the big stage'],
+  Sports: ['gets one more season', 'takes a team nobody wants to a final nobody expects', 'trains for the race that broke them'],
+  Family: ['must find a way home before the fair ends', 'tries to save the town parade', 'discovers the attic goes somewhere'],
+  Western: ['rides into a town that wants them dead', 'must hold the line until the railroad comes', 'hunts the man who burned the ranch'],
+};
+
+function ratingFor(rng: Rng, genres: Genre[]): MovieRating {
+  const g = genres[0];
+  if (g === 'Family') return rng.weighted([{ item: 'G' as const, weight: 35 }, { item: 'PG' as const, weight: 65 }]);
+  if (g === 'Horror') return rng.weighted([{ item: 'R' as const, weight: 75 }, { item: 'PG-13' as const, weight: 25 }]);
+  if (g === 'Crime' || g === 'Drama' || g === 'Thriller' || g === 'Western') return rng.weighted([{ item: 'R' as const, weight: 55 }, { item: 'PG-13' as const, weight: 45 }]);
+  if (g === 'Action' || g === 'Science Fiction' || g === 'Fantasy') return rng.weighted([{ item: 'PG-13' as const, weight: 80 }, { item: 'R' as const, weight: 15 }, { item: 'PG' as const, weight: 5 }]);
+  return rng.weighted([{ item: 'PG-13' as const, weight: 55 }, { item: 'PG' as const, weight: 25 }, { item: 'R' as const, weight: 20 }]);
+}
+
+export function generateMetadata(rng: Rng, genres: Genre[], tier: BudgetTier): { type: MovieType; rating: MovieRating; runtime: number; plotArc: string; plot: string } {
+  const g = genres[0];
+  const animationChance = g === 'Family' ? 0.35 : g === 'Fantasy' ? 0.12 : 0.02;
+  const type: MovieType = rng.chance(animationChance) ? 'animation' : 'live-action';
+  const longGenre = g === 'Drama' || g === 'Historical' || g === 'Fantasy' || g === 'Science Fiction';
+  const runtime = clamp(Math.round((longGenre ? 118 : g === 'Horror' || g === 'Comedy' || g === 'Family' ? 96 : 106) + tierIndex(tier) * 3 + rng.variance(14)), 78, 175);
+  const who = rng.pick(PROTAGONISTS[g] ?? PROTAGONISTS.Drama!);
+  const what = rng.pick(GOALS[g] ?? GOALS.Drama!);
+  const second = genres[1] ? ` A ${genres[1].toLowerCase()} in ${g.toLowerCase()} clothes.` : '';
+  const plot = `${who[0].toUpperCase()}${who.slice(1)} ${what}.${second}`;
+  return { type, rating: ratingFor(rng, genres), runtime, plotArc: rng.pick(PLOT_ARCS), plot };
+}
+
+/** Studios chase what is in fashion: slate weights bend toward hot genres and away from cold ones. */
+export function pickTierAndGenres(rng: Rng, studio: Studio, trends?: Partial<Record<Genre, number>>): { tier: BudgetTier; genres: Genre[] } {
   const profile = STUDIO_PROFILES[studio.identity];
   const tier = rng.weighted(profile.tiers);
-  const primary = rng.weighted(profile.genres);
+  const primary = rng.weighted(trends ? profile.genres.map((w) => ({ item: w.item, weight: w.weight * Math.pow(trends[w.item] ?? 1, 1.5) })) : profile.genres);
   const genres: Genre[] = [primary];
   if (rng.chance(0.45)) {
     const options = (PAIRINGS[primary] ?? []).filter((g) => g !== primary);
@@ -212,7 +302,7 @@ export function generateMovie(input: MovieGenInput): Movie {
   const id = `m-${week}-${counter}`;
   const rng = rngFor(worldSeed, id, week, 'moviegen');
 
-  const picked = pickTierAndGenres(rng, studio);
+  const picked = pickTierAndGenres(rng, studio, input.trends);
   const tier = input.tier ?? picked.tier;
   const genres = input.genres ?? picked.genres;
   const [lo, hi] = TIER_RANGE[tier];
@@ -230,6 +320,7 @@ export function generateMovie(input: MovieGenInput): Movie {
 
   const castingCloseWeek = week + rng.int(3, 5);
   const productionStartWeek = castingCloseWeek + rng.int(2, 6);
+  const meta = generateMetadata(rng, genres, tier);
 
   return {
     id,
@@ -239,7 +330,7 @@ export function generateMovie(input: MovieGenInput): Movie {
     studioId: studio.id,
     directorId: director.id,
     budget,
-    marketingBudget: Math.round(budget * MARKETING_RATIO[tier]),
+    marketingBudget: decideMarketing(rng, studio, tier, budget, commercialPotential),
     budgetTier: tier,
     roles: generateRoles(rng, id, tier, genres),
     cast: [],
@@ -248,6 +339,7 @@ export function generateMovie(input: MovieGenInput): Movie {
     castingCloseWeek,
     productionStartWeek,
     productionWeeks: rng.int(minW, maxW),
+    ...meta,
     hidden: { scriptQuality, audienceAppeal: appeal, commercialPotential },
     productionQualityMod: 0,
   };

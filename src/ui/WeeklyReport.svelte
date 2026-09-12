@@ -4,10 +4,10 @@
   let { events, title = 'This week' }: { events: TimelineEvent[]; title?: string } = $props();
 
   const TAG: Record<TimelineCategory, string> = {
-    time: '', training: 'info', audition: 'accent', casting: 'good', production: 'warn', release: 'info', box_office: 'accent', result: 'good', finance: 'bad', industry: '', contract: 'good', agent: 'info',
+    time: '', training: 'info', audition: 'accent', casting: 'good', production: 'warn', release: 'info', box_office: 'accent', result: 'good', finance: 'bad', industry: '', contract: 'good', agent: 'info', news: 'accent',
   };
   const LABEL: Record<TimelineCategory, string> = {
-    time: 'Time', training: 'Training', audition: 'Audition', casting: 'Casting', production: 'Production', release: 'Release', box_office: 'Box Office', result: 'Result', finance: 'Finance', industry: 'Industry', contract: 'Contract', agent: 'Agent',
+    time: 'Time', training: 'Training', audition: 'Audition', casting: 'Casting', production: 'Production', release: 'Release', box_office: 'Box Office', result: 'Result', finance: 'Finance', industry: 'Industry', contract: 'Contract', agent: 'Agent', news: 'News',
   };
 </script>
 

@@ -67,19 +67,34 @@ describe('Living world — 10 idle years', () => {
     }
   });
 
-  it('box office spreads across verdicts and is not budget × constant', () => {
+  it('box office spreads across verdicts (recoupment ladder) and is not budget × constant', () => {
     const counts: Partial<Record<Verdict, number>> = {};
     for (const m of completed) counts[m.boxOffice!.verdict!] = (counts[m.boxOffice!.verdict!] ?? 0) + 1;
     const share = (v: Verdict) => (counts[v] ?? 0) / completed.length;
-    expect(share('Flop') + share('Disaster')).toBeGreaterThan(0.1);
-    expect(share('Average')).toBeGreaterThan(0.2);
-    expect(share('Average')).toBeLessThan(0.65);
+    // Phase 4 target ≈ Disaster 10 / Flop 30 / Average 30 / Hit 15 / Super Hit 8 / Blockbuster 5 / All-Time 2;
+    // the flag is clustering (no label above 60%).
+    for (const v of Object.keys(counts) as Verdict[]) expect(share(v)).toBeLessThan(0.6);
+    expect(share('Flop') + share('Disaster')).toBeGreaterThan(0.25);
+    expect(share('Flop') + share('Disaster')).toBeLessThan(0.6);
+    expect(share('Average')).toBeGreaterThan(0.15);
     expect(share('Hit') + share('Super Hit') + share('Blockbuster') + share('All-Time Blockbuster')).toBeGreaterThan(0.15);
+    expect(share('All-Time Blockbuster')).toBeLessThan(0.05);
+    // A medium film with marketing ≈ budget breaks even near 2.5× budget, so the industry median gross sits well above 1×.
     const ratios = completed.map((m) => m.boxOffice!.worldwide / m.budget).sort((a, b) => a - b);
     const median = ratios[Math.floor(ratios.length / 2)];
-    expect(median).toBeGreaterThan(0.8);
-    expect(median).toBeLessThan(1.7);
+    expect(median).toBeGreaterThan(1.3);
+    expect(median).toBeLessThan(2.8);
     expect(ratios[Math.floor(ratios.length * 0.9)] / ratios[Math.floor(ratios.length * 0.1)]).toBeGreaterThan(2.5);
+    // Every finished run carries the Phase 4 truth: recoupment, profit, tags, ranks, word of mouth.
+    for (const m of completed) {
+      const r = m.boxOffice!;
+      expect(r.recoup).toBeGreaterThanOrEqual(0);
+      expect(typeof r.profit).toBe('number');
+      expect(r.tags).toBeDefined();
+      expect(r.weeks.every((w) => w.rank !== undefined && w.wom !== undefined)).toBe(true);
+      expect(r.weeks[0].note?.kind === 'opened_first' || r.weeks[0].note?.kind === 'opened_behind').toBe(true);
+      expect(m.reviews?.critics.length).toBe(2);
+    }
   });
 
   it('star power stays a pyramid — no inflation', () => {
@@ -137,5 +152,5 @@ describe('Living world — determinism and speed', () => {
     expect(secs).toBeLessThan(15);
     expect(game.state.week).toBe(8 + 40 * 52);
     expect([...game.ws.movies.values()].filter((m) => m.status === 'completed').length).toBeGreaterThan(1800);
-  });
+  }, 30_000);
 });

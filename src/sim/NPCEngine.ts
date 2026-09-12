@@ -99,6 +99,8 @@ export function generateActor(
     activeMovieIds: [],
     backendEarnings: 0,
     headToHead: [],
+    cumulativeGross: 0,
+    reviewCount: 0,
   };
 }
 

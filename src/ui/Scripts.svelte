@@ -3,6 +3,8 @@
   import { readScriptBlockedReason } from '../industry/AuditionEngine';
   import { formatMoney } from '../industry/BoxOfficeEngine';
   import { formatDate } from '../core/TimeEngine';
+  import { campaignBand } from '../world/ReleaseCalendarEngine';
+  import { CAMPAIGN_LABEL } from './format';
 
   const s = $derived(store.state!);
   const listings = $derived(s.listings.slice().sort((a, b) => Number(!!a.scriptRead) - Number(!!b.scriptRead)));
@@ -17,7 +19,7 @@
     {:else}
       <div class="table-wrap">
       <table class="data">
-        <thead><tr><th>Movie</th><th>Role</th><th class="num">Budget</th><th>Prestige</th><th>Commercial</th><th>Shoot</th><th></th></tr></thead>
+        <thead><tr><th>Movie</th><th>Role</th><th class="num">Budget</th><th>Prestige</th><th>Commercial</th><th>Campaign</th><th>Shoot</th><th></th></tr></thead>
         <tbody>
           {#each listings as l (l.id)}
             {@const m = store.movie(l.movieId)}
@@ -29,6 +31,7 @@
               <td class="num mono">{m ? formatMoney(m.budget) : ''}</td>
               <td class={l.scriptRead ? 'good' : 'muted'}>{l.estimatedPrestige}{#if l.scriptRead} ✓{/if}</td>
               <td class={l.scriptRead ? 'good' : 'muted'}>{l.estimatedCommercial}{#if l.scriptRead} ✓{/if}</td>
+              <td class="muted">{m ? CAMPAIGN_LABEL[campaignBand(m)] : ''}</td>
               <td class="muted tiny">{m ? formatDate(m.productionStartWeek, s.epochYear) : ''}</td>
               <td class="right">
                 {#if l.scriptRead}<span class="tag good">Read</span>

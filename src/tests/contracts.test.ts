@@ -48,7 +48,7 @@ describe('Salary guidelines (Part 1 scaling)', () => {
 
 describe('Payouts', () => {
   const movie = { budget: 50_000_000, marketingBudget: 50_000_000 } as Movie;
-  const run = (worldwide: number): BoxOfficeRun => ({ weeks: [], openingDomestic: 0, openingInternational: 0, totalDomestic: worldwide, totalInternational: 0, worldwide, finished: true });
+  const run = (worldwide: number): BoxOfficeRun => ({ weeks: [], openingDomestic: 0, openingInternational: 0, totalDomestic: worldwide, totalInternational: 0, worldwide, finished: true, wom: 55, expectedOpening: 0, peakWeek: 1 });
   const base: ContractTerms = { baseSalary: 1_000_000, bonuses: [{ multiple: 2, amount: 250_000 }], grossPoints: 0, netPoints: 0, billing: 1, sequelOption: false, promoWeeks: 2, payOrPlay: false };
   it('bonus tiers pay only when the multiple is reached', () => {
     expect(computePayout(base, run(90_000_000), movie, undefined).bonus).toBe(0);

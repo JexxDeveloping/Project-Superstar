@@ -65,6 +65,8 @@ export interface FilmCredit {
   ageAtRelease?: number;
   /** Absent for a completed shoot; 'cancelled' when the production collapsed before cameras rolled. */
   status?: 'cancelled';
+  /** Bonuses + points paid at run end (player credits only; NPCs are paid flat). */
+  backend?: number;
 }
 
 /** Credits that count as experience (a collapsed production is a story, not a film). */
@@ -111,6 +113,11 @@ export interface Person {
   backendEarnings: number;
   /** Every audition the player was scored against a named competitor: the raw material for rivalries. */
   headToHead: HeadToHeadRecord[];
+  /** Running history for the profile page: worldwide gross of every released credit, and the critic average. */
+  cumulativeGross: number;
+  reviewCount: number;
+  /** Mean critic score across released films (undefined until the first one). */
+  reviewAvg?: number;
 }
 
 export interface HeadToHeadRecord {
@@ -166,9 +173,20 @@ export interface Director {
   boxOfficeRecord: number; // 0–100
   playerRelationship: number; // 0–100
   filmIds: Id[];
+  /** Per-film record, appended when each film's run resolves (the director's filmography). */
+  credits: DirectorCredit[];
   lastWorkedWeek: number;
   /** Movie id currently attached to (a director shoots one film at a time). */
   activeMovieId?: Id;
+}
+
+export interface DirectorCredit {
+  movieId: Id;
+  week: number;
+  verdict: Verdict;
+  worldwide: number;
+  criticScore: number;
+  recoup: number;
 }
 
 export interface Role {
@@ -201,14 +219,35 @@ export interface CastEntry {
 export type MovieStatus =
   | 'casting' | 'pre-production' | 'filming' | 'post-production' | 'released' | 'completed' | 'cancelled';
 
+/** Why this week went the way it did — the result screen turns these into sentences. */
+export type WeekNoteKind =
+  | 'opened_first' | 'opened_behind' | 'grew' | 'held' | 'crushed' | 'collapsed' | 'holiday' | 'breathed' | 'dropped' | 'viral';
+
+export interface WeekNote {
+  kind: WeekNoteKind;
+  /** The rival that shaped the week (opened ahead, or crushed this film). */
+  rivalId?: Id;
+  /** Name of the holiday window that lifted the week. */
+  window?: string;
+}
+
+export type WomBand = 'building' | 'strong' | 'fading' | 'toxic';
+
 export interface BoxOfficeWeek {
   week: number; // absolute week index
   domestic: number;
   international: number;
+  /** Domestic rank that week (1 = #1), assigned once every film's week is in. */
+  rank?: number;
+  /** Word of mouth as the public sees it that week. */
+  wom?: WomBand;
+  note?: WeekNote;
 }
 
 export type Verdict =
   | 'Disaster' | 'Flop' | 'Average' | 'Hit' | 'Super Hit' | 'Blockbuster' | 'All-Time Blockbuster';
+
+export type BoxOfficeTag = 'Sleeper' | 'Cult seed' | 'Beat expectations' | 'Missed expectations' | 'Viral';
 
 export interface BoxOfficeRun {
   weeks: BoxOfficeWeek[];
@@ -219,6 +258,42 @@ export interface BoxOfficeRun {
   worldwide: number;
   finished: boolean;
   verdict?: Verdict;
+  /** Hidden word-of-mouth stat (0–100); the player only ever sees `weeks[i].wom`. */
+  wom: number;
+  /** What the opening "should" have been from fundamentals alone (no luck) — the basis for Beat/Missed. */
+  expectedOpening: number;
+  /** Domestic rank on opening week. */
+  openingRank?: number;
+  /** 1-based index of the biggest domestic week (a sleeper peaks after week 1). */
+  peakWeek: number;
+  /** Set when the run finishes: the truth behind the verdict. */
+  theatricalTake?: number;
+  afterlife?: number;
+  recoup?: number;
+  profit?: number;
+  tags?: BoxOfficeTag[];
+}
+
+/** A tracking report the week before release: the studio's estimate of the domestic opening. */
+export interface TrackingReport {
+  week: number;
+  low: number;
+  high: number;
+}
+
+export type Campaign = 'heavy' | 'modest' | 'minimal';
+
+export type MovieType = 'live-action' | 'animation';
+export type MovieRating = 'G' | 'PG' | 'PG-13' | 'R';
+
+export interface ReviewSnippet {
+  outlet: string;
+  text: string;
+}
+
+export interface MovieReviews {
+  critics: ReviewSnippet[];
+  audience: string;
 }
 
 export interface Movie {
@@ -245,7 +320,16 @@ export interface Movie {
   cancelledReason?: string;
   /** Set when production wraps. */
   wrapWeek?: number;
+  /** Claimed on the release calendar at wrap; can move if a bigger rival lands on it. */
   releaseWeek?: number;
+  /** Times the studio moved the date (each one comes with a news line). */
+  dateMoves?: number;
+  /** Metadata for the movie profile page. */
+  type: MovieType;
+  rating: MovieRating;
+  runtime: number; // minutes
+  plotArc: string;
+  plot: string;
   /** Hidden truths the player only sees as bands. */
   hidden: {
     scriptQuality: number; // 0–100
@@ -256,6 +340,10 @@ export interface Movie {
   productionQualityMod: number;
   /** Movie Quality axis (Q). Set when production wraps. */
   quality?: QualityResult;
+  /** Critic and audience snippets, written on release. */
+  reviews?: MovieReviews;
+  /** The week before release (player films only). */
+  tracking?: TrackingReport;
   boxOffice?: BoxOfficeRun;
 }
 
@@ -484,7 +572,7 @@ export type PlannedAction =
   | { type: 'apply'; listingId: Id };
 
 export type TimelineCategory =
-  | 'time' | 'training' | 'audition' | 'casting' | 'contract' | 'agent' | 'production' | 'release' | 'box_office' | 'result' | 'finance' | 'industry';
+  | 'time' | 'training' | 'audition' | 'casting' | 'contract' | 'agent' | 'production' | 'release' | 'box_office' | 'result' | 'finance' | 'industry' | 'news';
 
 export interface TimelineEvent {
   week: number;
@@ -524,6 +612,29 @@ export interface GameState {
   agents: Agent[];
   /** Agents currently offering to represent the player. */
   agentApproaches: Id[];
+  /** How in fashion each genre is right now (1 = normal); random-walks over the years. */
+  genreTrends: Record<Genre, number>;
+  /** Box-office records: all-time and per calendar year. */
+  records: BoxOfficeRecords;
+}
+
+export interface RecordEntry {
+  movieId: Id;
+  title: string;
+  amount: number;
+  week: number;
+}
+
+export interface RecordSet {
+  opening?: RecordEntry;
+  gross?: RecordEntry;
+  /** Amount = estimated loss. */
+  bomb?: RecordEntry;
+}
+
+export interface BoxOfficeRecords {
+  allTime: RecordSet;
+  byYear: Record<number, RecordSet>;
 }
 
 /**

@@ -8,7 +8,7 @@
  */
 import {
   TIMELINE_CAP, fullName, type GameState, type Movie, type MovieResult, type PerformanceResult, type QualityResult,
-  type StatDelta, type TimelineEvent, type Verdict, type WorkingSet, markDirty,
+  type StatDelta, type TimelineEvent, type Verdict, type WeekNote, type WorkingSet, markDirty,
 } from './GameState';
 import { EventBus } from './EventBus';
 import { ageInYears, resolvePlayerWeek, starTier, WEEKS_PER_YEAR } from '../sim/ActorEngine';
@@ -26,10 +26,16 @@ import {
 } from '../industry/PerformanceEngine';
 import { applyQualityImpacts, evaluateQuality, qualityImpacts } from '../industry/QualityEngine';
 import {
-  applyCommercialImpacts, commercialImpacts, formatMoney, openRun, tickRun, weekOverWeek,
+  allTimeGate, applyCommercialImpacts, commercialImpacts, expectedOpening, finishRun, formatMoney, openRun, tickRun, trackingReport, weekNote, weekOverWeek,
+  type Opener,
 } from '../industry/BoxOfficeEngine';
 import { greenlightSlates, recordStudioResult } from '../world/StudioEngine';
 import { recordDirectorResult } from '../world/DirectorEngine';
+import { scheduleRelease, windowName } from '../world/ReleaseCalendarEngine';
+import { tickGenreTrends } from '../world/TrendEngine';
+import { recordFinish, recordOpening } from '../world/RecordsEngine';
+import { generateReviews } from '../gen/ReviewGen';
+import { agentEffects } from '../world/AgentEngine';
 
 // ---------------------------------------------------------------------------
 // Calendar
@@ -249,19 +255,8 @@ export function advanceWeek(state: GameState, ws: WorkingSet, opts: TickOptions 
     }
   }
   for (const t of transitions) {
-    if (t.to === 'player-ready') continue;
-    const movie = ws.movies.get(t.movieId)!;
-    if (t.to === 'wrapped') {
-      finalizeWrap(state, ws, movie, undefined, bus);
-    } else if (t.to === 'released') {
-      const run = openRun(state.worldSeed, week, movie, ws);
-      markDirty(ws, 'movies', movie.id);
-      if (hasPlayer(movie, player.id)) {
-        bus.emit('box_office', `${movie.title} — opening weekend`, `Domestic ${formatMoney(run.openingDomestic)} · International ${formatMoney(run.openingInternational)} · Worldwide ${formatMoney(run.worldwide)}`);
-      } else if (movie.budget >= 40_000_000 || run.worldwide >= 30_000_000) {
-        bus.emit('industry', `${movie.title} opens to ${formatMoney(run.worldwide)} worldwide`, `${ws.studios.get(movie.studioId)?.name} · ${movie.genres.join('/')} · budget ${formatMoney(movie.budget)}.`);
-      }
-    }
+    if (t.to === 'wrapped') finalizeWrap(state, ws, ws.movies.get(t.movieId)!, undefined, bus);
+    // 'released' films open in step 5, together, so competition and ranks are computed over the whole week.
   }
 
   // 3b. Recovery: a player film already marked filming with no shoot running (e.g. a save from
@@ -292,36 +287,98 @@ export function advanceWeek(state: GameState, ws: WorkingSet, opts: TickOptions 
     }
   }
 
-  // 5. Theatrical runs for every released film (opened this week → next tick starts week 2).
-  let weekTop: { movie: Movie; weekly: number } | null = null;
-  for (const movie of ws.movies.values()) {
-    if (movie.status !== 'released' || !movie.boxOffice) continue;
-    const run = movie.boxOffice;
-    const last = run.weeks[run.weeks.length - 1];
-    if (last.week === week) {
-      const weekly = last.domestic + last.international;
-      if (!weekTop || weekly > weekTop.weekly) weekTop = { movie, weekly };
-      continue;
+  // 4b. Tracking: the week before one of the player's films opens, the studio's estimate arrives.
+  if (!worldOnly) {
+    const fx = agentEffects(agentFor(state));
+    for (const id of state.trackedMovieIds) {
+      const movie = ws.movies.get(id);
+      if (!movie || movie.status !== 'post-production' || movie.releaseWeek !== week + 1 || movie.tracking) continue;
+      const accuracy = player.attributes.connections / 100 + fx.visibilityBoost * 0.3;
+      movie.tracking = trackingReport(state, ws, movie, accuracy);
+      markDirty(ws, 'movies', movie.id);
+      const w = windowName(movie.releaseWeek);
+      bus.emit('box_office', `Tracking: ${movie.title} looks like ${formatMoney(movie.tracking.low)}–${formatMoney(movie.tracking.high)}`, `Opens next week${w ? ` (${w})` : ''}. The studio's read on the domestic opening — the number to beat.`);
     }
-    const finished = tickRun(state.worldSeed, week, movie);
-    markDirty(ws, 'movies', movie.id);
-    const i = run.weeks.length - 1;
-    const now = run.weeks[i];
-    const weekly = now.domestic + now.international;
-    if (!weekTop || weekly > weekTop.weekly) weekTop = { movie, weekly };
-    if (hasPlayer(movie, player.id)) {
-      const wow = weekOverWeek(run, i);
-      bus.emit('box_office', `${movie.title} — week ${i + 1}`, `Domestic ${formatMoney(now.domestic)}${wow !== null ? ` (${wow >= 0 ? '+' : ''}${Math.round(wow * 100)}%)` : ''} · International ${formatMoney(now.international)} · Total ${formatMoney(run.worldwide)}`);
-    }
-    if (finished) resolveRun(state, ws, movie, bus);
-  }
-  if (weekTop && !worldOnly) {
-    bus.emit('industry', `Box office: ${weekTop.movie.title} leads the week`, `${formatMoney(weekTop.weekly)} worldwide this week · ${formatMoney(weekTop.movie.boxOffice!.worldwide)} to date.`);
   }
 
-  // 6. The living cohort: drift, aging, retirements, newcomers.
+  // 5. Box office. Openers first (competition from each other), then holdovers (competition from the
+  //    openers), then ranks for the week, then news, records and finished runs.
+  const openers: Movie[] = [];
+  const holdovers: Movie[] = [];
+  for (const movie of ws.movies.values()) {
+    if (movie.status !== 'released') continue;
+    if (!movie.boxOffice) openers.push(movie);
+    else if (movie.boxOffice.weeks[movie.boxOffice.weeks.length - 1].week !== week) holdovers.push(movie);
+  }
+  openers.sort((a, b) => (a.id < b.id ? -1 : 1));
+  holdovers.sort((a, b) => (a.id < b.id ? -1 : 1));
+  const expected: Opener[] = openers.map((m) => ({ movie: m, size: expectedOpening(state, ws, m, week, []) }));
+  for (const movie of openers) {
+    movie.reviews = generateReviews(state.worldSeed, week, movie, ws);
+    openRun(state, ws, movie, expected.filter((o) => o.movie.id !== movie.id));
+    markDirty(ws, 'movies', movie.id);
+  }
+  const actualOpeners: Opener[] = openers.map((m) => ({ movie: m, size: m.boxOffice!.openingDomestic }));
+  const finishedThisWeek: Movie[] = [];
+  const outcomes = new Map<string, ReturnType<typeof tickRun>>();
+  for (const movie of holdovers) {
+    const out = tickRun(state, movie, actualOpeners);
+    outcomes.set(movie.id, out);
+    const run = movie.boxOffice!;
+    run.weeks[run.weeks.length - 1].note = weekNote(out, week);
+    markDirty(ws, 'movies', movie.id);
+    if (out.finished) finishedThisWeek.push(movie);
+  }
+  // Ranks by domestic gross this week.
+  const playing = [...openers, ...holdovers].sort((a, b) => {
+    const wa = a.boxOffice!.weeks[a.boxOffice!.weeks.length - 1];
+    const wb = b.boxOffice!.weeks[b.boxOffice!.weeks.length - 1];
+    return wb.domestic - wa.domestic || (a.id < b.id ? -1 : 1);
+  });
+  playing.forEach((m, i) => {
+    const run = m.boxOffice!;
+    run.weeks[run.weeks.length - 1].rank = i + 1;
+    if (run.weeks.length === 1) {
+      run.openingRank = i + 1;
+      run.weeks[0].note = i === 0 ? { kind: 'opened_first' } : { kind: 'opened_behind', rivalId: playing[0].id };
+    }
+  });
+  for (const movie of openers) {
+    const run = movie.boxOffice!;
+    recordOpening(state, movie, bus);
+    if (hasPlayer(movie, player.id)) {
+      const t = movie.tracking;
+      const vs = t ? (run.openingDomestic > t.high ? 'above tracking' : run.openingDomestic < t.low ? 'below tracking' : 'on tracking') : '';
+      bus.emit('box_office', `${movie.title} opens #${run.openingRank}${vs ? ` — ${vs}` : ''}`,
+        `Domestic ${formatMoney(run.openingDomestic)}${t ? ` (tracking said ${formatMoney(t.low)}–${formatMoney(t.high)})` : ''} · International ${formatMoney(run.openingInternational)} · Worldwide ${formatMoney(run.worldwide)}${run.openingRank! > 1 ? ` · behind ${playing[0].title}` : ''}.`);
+    } else if (movie.budget >= 40_000_000 || run.worldwide >= 30_000_000) {
+      bus.emit('industry', `${movie.title} opens #${run.openingRank} to ${formatMoney(run.worldwide)} worldwide`, `${ws.studios.get(movie.studioId)?.name} · ${movie.genres.join('/')} · budget ${formatMoney(movie.budget)}.`);
+    }
+  }
+  for (const movie of holdovers) {
+    if (!hasPlayer(movie, player.id)) continue;
+    const run = movie.boxOffice!;
+    const i = run.weeks.length - 1;
+    const now = run.weeks[i];
+    const wow = weekOverWeek(run, i);
+    bus.emit('box_office', `${movie.title} — week ${i + 1}, #${now.rank}`, `Domestic ${formatMoney(now.domestic)}${wow !== null ? ` (${wow >= 0 ? '+' : ''}${Math.round(wow * 100)}%)` : ''} · International ${formatMoney(now.international)} · Total ${formatMoney(run.worldwide)} · word of mouth ${now.wom}${describeNote(now.note, ws)}`);
+  }
+  if (playing.length > 0 && !worldOnly) {
+    const top = playing[0];
+    const w = top.boxOffice!.weeks[top.boxOffice!.weeks.length - 1];
+    bus.emit('industry', `Box office: ${top.title} is #1${w.rank === 1 && top.boxOffice!.weeks.length > 1 ? ` for week ${top.boxOffice!.weeks.length}` : ''}`, `${formatMoney(w.domestic)} domestic this week · ${formatMoney(top.boxOffice!.worldwide)} worldwide to date.`);
+  }
+  const gate = finishedThisWeek.length ? allTimeGate(ws, week) : 0;
+  for (const movie of finishedThisWeek) {
+    finishRun(ws, movie, week, gate);
+    recordFinish(state, movie, bus);
+    resolveRun(state, ws, movie, bus);
+  }
+
+  // 6. The living cohort: drift, aging, retirements, newcomers; the slow tide of genre fashion.
   npcWeeklyDrift(state.worldSeed, week, ws);
   tickCareers(state, ws, bus);
+  tickGenreTrends(state);
 
   // 7. Close the week.
   const events = bus.events();
@@ -357,7 +414,21 @@ function finalizeWrap(state: GameState, ws: WorkingSet, movie: Movie, playerCtx:
   }
   movie.quality = evaluateQuality(worldSeed, week, movie, ws);
   wrapMovie(state, ws, movie.id);
-  void bus;
+  // The studio has seen the film: it sizes the campaign and claims a release week on the calendar.
+  scheduleRelease(state, ws, movie, movie.releaseWeek!, bus);
+}
+
+function describeNote(note: WeekNote | undefined, ws: WorkingSet): string {
+  if (!note) return '';
+  switch (note.kind) {
+    case 'grew': return ' · grew on word of mouth';
+    case 'held': return ' · held well';
+    case 'holiday': return ` · ${note.window ?? 'holiday'} lifted the whole market`;
+    case 'crushed': return ` · lost screens to ${ws.movies.get(note.rivalId ?? '')?.title ?? 'a new release'}`;
+    case 'collapsed': return ' · collapsed';
+    case 'viral': return ' · went viral';
+    default: return '';
+  }
 }
 
 /** The run is over: verdict is set; route each axis to every cast member's career. */
@@ -383,12 +454,17 @@ function resolveRun(state: GameState, ws: WorkingSet, movie: Movie, bus: EventBu
       credit.performance = c.performance;
       credit.ageAtRelease = ageInYears(person, state.week);
     }
+    // Running history for the profile page: every released credit adds its gross and its review.
+    person.cumulativeGross = (person.cumulativeGross ?? 0) + run.worldwide;
+    person.reviewAvg = ((person.reviewAvg ?? 0) * (person.reviewCount ?? 0) + quality.criticScore) / ((person.reviewCount ?? 0) + 1);
+    person.reviewCount = (person.reviewCount ?? 0) + 1;
     if (person.attributes.starPower > person.peakStarPower) person.peakStarPower = person.attributes.starPower;
     markDirty(ws, 'people', person.id);
 
     if (person.isPlayer) {
       if (c.contract) {
         const payout = computePayout(c.contract, run, movie, agentFor(state));
+        if (credit) credit.backend = payout.total;
         if (payout.bonus + payout.gross + payout.net > 0) {
           person.cash += payout.total;
           person.careerEarnings += payout.bonus + payout.gross + payout.net;
@@ -411,9 +487,9 @@ function resolveRun(state: GameState, ws: WorkingSet, movie: Movie, bus: EventBu
   recordStudioResult(ws, movie, playerTrustDelta, hasPlayer(movie, player.id));
   completeMovie(ws, movie.id);
 
-  const notable = movie.budget >= 40_000_000 || run.worldwide >= 50_000_000 || run.verdict === 'All-Time Blockbuster' || (run.verdict === 'Disaster' && movie.budget >= 10_000_000);
+  const notable = movie.budget >= 40_000_000 || run.worldwide >= 50_000_000 || run.verdict === 'All-Time Blockbuster' || (run.verdict === 'Disaster' && movie.budget >= 10_000_000) || run.tags?.includes('Sleeper');
   if (notable && !hasPlayer(movie, player.id)) {
-    bus.emit('industry', `${movie.title} finishes as a ${run.verdict}`, `${formatMoney(run.worldwide)} worldwide on a ${formatMoney(movie.budget)} budget · critics ${quality.criticScore}% · audience ${quality.audienceScore}%.`);
+    bus.emit('industry', `${movie.title} finishes as a ${run.verdict}${run.tags?.length ? ` (${run.tags.join(', ')})` : ''}`, `${formatMoney(run.worldwide)} worldwide on a ${formatMoney(movie.budget)} budget (+${formatMoney(movie.marketingBudget)} marketing) · returned ${run.recoup?.toFixed(2)}× its cost · critics ${quality.criticScore}% · audience ${quality.audienceScore}%.`);
   }
 }
 

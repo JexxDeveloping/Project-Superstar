@@ -35,13 +35,13 @@ export function greenlightSlates(state: GameState, ws: WorkingSet, bus: EventBus
     const rng = rngFor(worldSeed, studio.id, week, 'greenlight');
     if (!rng.chance(p)) continue;
 
-    const picked = pickTierAndGenres(rngFor(worldSeed, studio.id, week, 'slate-pick'), studio);
+    const picked = pickTierAndGenres(rngFor(worldSeed, studio.id, week, 'slate-pick'), studio, state.genreTrends);
     const director = chooseDirector(rngFor(worldSeed, studio.id, week, 'director-pick'), picked.genres, picked.tier, directors);
     if (!director) continue; // everyone is busy; try next week
 
     state.genCounter += 1;
     const movie = generateMovie({
-      universeId, worldSeed, week, counter: state.genCounter, studio, director, takenTitles: titles, tier: picked.tier, genres: picked.genres,
+      universeId, worldSeed, week, counter: state.genCounter, studio, director, takenTitles: titles, tier: picked.tier, genres: picked.genres, trends: state.genreTrends,
     });
     ws.movies.set(movie.id, movie);
     markDirty(ws, 'movies', movie.id);

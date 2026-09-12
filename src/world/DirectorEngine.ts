@@ -52,6 +52,7 @@ export function generateDirector(
     boxOfficeRecord: overrides.boxOfficeRecord ?? rng.float(spec.boxOffice[0], spec.boxOffice[1]),
     playerRelationship: 50,
     filmIds: [],
+    credits: [],
     lastWorkedWeek: week - rng.int(10, 80),
   };
 }
@@ -60,6 +61,11 @@ export function generateDirector(
 export function recordDirectorResult(ws: WorkingSet, movie: Movie): void {
   const d = ws.directors.get(movie.directorId);
   if (!d || !movie.quality || !movie.boxOffice?.verdict) return;
+  const run = movie.boxOffice;
+  if (!d.credits) d.credits = [];
+  if (!d.credits.some((c) => c.movieId === movie.id)) {
+    d.credits.push({ movieId: movie.id, week: run.weeks[run.weeks.length - 1].week, verdict: movie.boxOffice.verdict, worldwide: run.worldwide, criticScore: movie.quality.criticScore, recoup: run.recoup ?? 0 });
+  }
   const rank = VERDICT_RANK[movie.boxOffice.verdict]; // 0..6
   const boTarget = 26 + rank * 12; // Disaster 26 … Average 50 … All-Time 98
   d.boxOfficeRecord = clamp(d.boxOfficeRecord * 0.75 + boTarget * 0.25, 1, 100);

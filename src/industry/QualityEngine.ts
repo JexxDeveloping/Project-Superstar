@@ -62,9 +62,12 @@ export function evaluateQuality(
   if (productionQualityMod >= 4) notes.push('A charmed shoot.');
   if (productionQualityMod <= -4) notes.push('A troubled production shows on screen.');
 
-  const criticScore = clamp(q + (director.prestige - 50) / 8 + rng.variance(9), 0, 100);
+  // Scores fan out wider than Q itself: critics and crowds amplify — a 60 film reads as a 65 review,
+  // a 40 as a 34 — so beloved films reach the 80s and hated ones the 20s (Phase 4: word of mouth,
+  // the afterlife rate and legs all key off these).
+  const criticScore = clamp(50 + (q - 50) * 1.6 + (director.prestige - 50) / 8 + rng.variance(10), 3, 99);
   const tilt = movie.genres.reduce((s, g) => s + (AUDIENCE_TILT[g] ?? 0), 0) / movie.genres.length;
-  const audienceScore = clamp(0.55 * q + 0.45 * movie.hidden.audienceAppeal + tilt + rng.variance(10), 0, 100);
+  const audienceScore = clamp(50 + (0.55 * q + 0.45 * movie.hidden.audienceAppeal - 50) * 2.0 + tilt + rng.variance(10), 5, 99);
 
   return {
     q: Math.round(q),

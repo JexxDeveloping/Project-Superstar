@@ -11,7 +11,7 @@ import {
   type Studio, type WorkingSet,
 } from '../core/GameState';
 
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 
 export interface SaveSlot {
   universeId: Id;
@@ -60,6 +60,17 @@ class SimDatabase extends Dexie {
     });
     // v3 (Phase 3): contracts on cast entries, agents in hot state, studio deal temper, cancelled films.
     this.version(3).stores({
+      people: 'id, universeId, status, [universeId+status]',
+      movies: 'id, universeId, status, [universeId+status]',
+      studios: 'id, universeId',
+      directors: 'id, universeId',
+      saves: 'universeId, savedAt',
+    });
+    // v4 (Phase 4): the box office run carries WOM/recoupment/tags/notes, movies carry metadata,
+    // reviews, tracking and a claimed release date, people carry running gross + review averages,
+    // directors carry per-film credits, hot state carries genre trends and records. Indexes unchanged;
+    // Phase 3 hot states are flagged incompatible by `listSaves`.
+    this.version(4).stores({
       people: 'id, universeId, status, [universeId+status]',
       movies: 'id, universeId, status, [universeId+status]',
       studios: 'id, universeId',

@@ -142,6 +142,8 @@ export function createPlayer(universeId: Id, worldSeed: number, startWeek: numbe
     activeMovieIds: [],
     backendEarnings: 0,
     headToHead: [],
+    cumulativeGross: 0,
+    reviewCount: 0,
   };
 }
 

@@ -25,6 +25,8 @@ import { attachPerson } from '../industry/MovieEngine';
 import { SAVE_VERSION, type SaveEngine } from '../meta/SaveEngine';
 import { generateActor, takenNames } from '../sim/NPCEngine';
 import { generateDirector } from '../world/DirectorEngine';
+import { initGenreTrends } from '../world/TrendEngine';
+import { emptyRecords } from '../world/RecordsEngine';
 
 export const EPOCH_YEAR = 2028;
 /** Week 8 of 2028 = March, week 1 (4-4-5 calendar). */
@@ -151,6 +153,8 @@ export class Game {
       genCounter: seed.genCounter,
       agents: generateAgents(universeId, worldSeed),
       agentApproaches: [],
+      genreTrends: initGenreTrends(worldSeed),
+      records: emptyRecords(),
     };
 
     // The world existed before you: studios slate, films shoot and open, careers move.
@@ -182,7 +186,11 @@ export class Game {
     // The hot player copy is authoritative; keep the table's row pointing at the same object.
     ws.people.set(state.player.id, state.player);
     if (state.dayJob === undefined) state.dayJob = null;
+    if (!state.genreTrends) state.genreTrends = initGenreTrends(state.worldSeed);
+    if (!state.records) state.records = emptyRecords();
     for (const st of ws.studios.values()) if (!st.filmLog) { st.filmLog = []; markDirty(ws, 'studios', st.id); }
+    for (const d of ws.directors.values()) if (!d.credits) { d.credits = []; markDirty(ws, 'directors', d.id); }
+    for (const p of ws.people.values()) if (p.cumulativeGross === undefined) { p.cumulativeGross = 0; p.reviewCount = 0; markDirty(ws, 'people', p.id); }
     const game = new Game(state, ws, save);
     const repaired = repairWorkingSet(state, ws);
     game.repairedOnLoad = repaired;

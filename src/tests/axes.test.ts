@@ -78,9 +78,9 @@ describe('Three independent axes', () => {
     hated.quality = { q: 30, band: 'Poor', criticScore: 25, audienceScore: 35, notes: [] };
 
     const run = (m: typeof loved) => {
-      openRun(game.state.worldSeed, 100, m, game.ws);
-      let w = 101;
-      while (!tickRun(game.state.worldSeed, w, m)) w++;
+      const state = { ...game.state, week: 100 };
+      openRun(state, game.ws, m, []);
+      while (!tickRun({ ...state, week: state.week + 1 }, m, []).finished) state.week++;
       return m.boxOffice!;
     };
     const a = run(loved);

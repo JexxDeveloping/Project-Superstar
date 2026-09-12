@@ -3,6 +3,8 @@
   import { formatDate } from '../core/TimeEngine';
   import { formatMoney } from '../industry/BoxOfficeEngine';
   import { applyBlockedReason, readScriptBlockedReason } from '../industry/AuditionEngine';
+  import { campaignBand } from '../world/ReleaseCalendarEngine';
+  import { CAMPAIGN_LABEL } from './format';
 
   const s = $derived(store.state!);
   const history = $derived(s.applications.filter((a) => !['applied', 'audition_pending', 'offer', 'booked'].includes(a.status)).slice().reverse());
@@ -19,7 +21,7 @@
     <div class="table-wrap">
     <table class="data">
       <thead>
-        <tr><th>Movie</th><th>Genre</th><th class="num">Budget</th><th>Role</th><th>Director</th><th>Cast so far</th><th class="num">Salary</th><th class="num">Diff. / Req.</th><th>Prestige</th><th>Commercial</th><th>Shoot</th><th></th></tr>
+        <tr><th>Movie</th><th>Genre</th><th class="num">Budget</th><th>Role</th><th>Director</th><th>Cast so far</th><th class="num">Salary</th><th class="num">Diff. / Req.</th><th>Prestige</th><th>Commercial</th><th>Campaign</th><th>Shoot</th><th></th></tr>
       </thead>
       <tbody>
         {#each s.listings as l (l.id)}
@@ -38,6 +40,7 @@
             <td class="num mono">{l.difficulty} / <span class:bad={s.player.attributes.acting < l.requiredActing}>{l.requiredActing}</span></td>
             <td class="muted">{l.estimatedPrestige}{#if l.scriptRead}<span class="good"> ✓</span>{/if}</td>
             <td class="muted">{l.estimatedCommercial}{#if l.scriptRead}<span class="good"> ✓</span>{/if}</td>
+            <td class="muted" title="How big a marketing push the studio has committed to — whether the film will open">{m ? CAMPAIGN_LABEL[campaignBand(m)] : ''}</td>
             <td class="muted tiny">{m ? formatDate(m.productionStartWeek, s.epochYear) : ''}<br />{m?.productionWeeks} wks</td>
             <td class="right">
               {#if !l.scriptRead}

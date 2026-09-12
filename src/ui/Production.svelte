@@ -4,7 +4,9 @@
   import { boxOfficeOption } from './charts';
   import { formatDate } from '../core/TimeEngine';
   import { formatMoney, weekOverWeek } from '../industry/BoxOfficeEngine';
+  import { campaignBand, windowName } from '../world/ReleaseCalendarEngine';
   import { PREP_ROLE_CAP } from '../sim/ActorEngine';
+  import { CAMPAIGN_LABEL, WOM_CLASS, WOM_LABEL, weekNoteText } from './format';
   import type { Movie } from '../core/GameState';
 
   const s = $derived(store.state!);
@@ -13,6 +15,16 @@
   const tracked = $derived(
     s.trackedMovieIds.map((id) => store.movie(id)).filter((m): m is Movie => !!m && m.status !== 'filming' && m.status !== 'pre-production'),
   );
+  const titleOf = (id: string) => store.movie(id)?.title ?? 'another film';
+
+  function openingLine(m: Movie): { verdict: string; cls: string } {
+    const r = m.boxOffice!;
+    const t = m.tracking;
+    if (!t) return { verdict: `It opened to ${formatMoney(r.openingDomestic)} domestic.`, cls: '' };
+    if (r.openingDomestic > t.high) return { verdict: `Tracking said ${formatMoney(t.low)}–${formatMoney(t.high)}. It did ${formatMoney(r.openingDomestic)}.`, cls: 'good' };
+    if (r.openingDomestic < t.low) return { verdict: `Tracking said ${formatMoney(t.low)}–${formatMoney(t.high)}. It did ${formatMoney(r.openingDomestic)}.`, cls: 'bad' };
+    return { verdict: `Tracking said ${formatMoney(t.low)}–${formatMoney(t.high)}. It did ${formatMoney(r.openingDomestic)} — on the money.`, cls: 'warn' };
+  }
 </script>
 
 <div class="stack">
@@ -57,36 +69,72 @@
   </section>
 
   {#each tracked as m (m.id)}
+    {@const window = m.releaseWeek !== undefined ? windowName(m.releaseWeek) : undefined}
     <section class="panel">
       <div class="panel-head">
-        <div><h2>{m.title}</h2><div class="muted tiny">{m.genres.join(' / ')} · {store.studio(m.studioId)?.name} · Budget {formatMoney(m.budget)}</div></div>
+        <div><h2>{m.title}</h2><div class="muted tiny">{m.genres.join(' / ')} · {store.studio(m.studioId)?.name} · Budget {formatMoney(m.budget)} · Campaign {CAMPAIGN_LABEL[campaignBand(m)].toLowerCase()} ({formatMoney(m.marketingBudget)})</div></div>
         <span class="tag {m.status === 'released' ? 'accent' : 'info'}">{m.status === 'released' ? 'In theaters' : 'Post-production'}</span>
       </div>
       {#if m.status === 'post-production'}
-        <p class="muted">Editing, scoring, marketing. Opens {formatDate(m.releaseWeek!, s.epochYear)}. Your performance and the film's quality are locked — the world sees them on release.</p>
+        <p class="muted">Editing, scoring, marketing. Opens {formatDate(m.releaseWeek!, s.epochYear)}{window ? ` — ${window}` : ''}{(m.dateMoves ?? 0) > 0 ? ' (date moved by the studio)' : ''}. Your performance and the film's quality are locked — the world sees them on release.</p>
+        {#if m.tracking}
+          <div class="card" style="margin-top:10px">
+            <div class="stat-label">Tracking</div>
+            <div class="stat-big mono">{formatMoney(m.tracking.low)}–{formatMoney(m.tracking.high)}</div>
+            <div class="muted tiny">The studio's estimate of the domestic opening. The number to beat.</div>
+          </div>
+        {:else}
+          <p class="muted tiny" style="margin-top:8px">Tracking arrives the week before release.</p>
+        {/if}
       {:else if m.boxOffice}
-        <div class="grid grid-3" style="margin-bottom:12px">
-          <div class="card"><div class="stat-label">Opening (WW)</div><div class="stat-big mono">{formatMoney(m.boxOffice.openingDomestic + m.boxOffice.openingInternational)}</div></div>
-          <div class="card"><div class="stat-label">Worldwide to date</div><div class="stat-big mono">{formatMoney(m.boxOffice.worldwide)}</div></div>
-          <div class="card"><div class="stat-label">Reception</div><div class="stat-big">{m.quality?.criticScore}% <span class="muted" style="font-size:14px">critics</span> · {m.quality?.audienceScore}% <span class="muted" style="font-size:14px">audience</span></div></div>
+        {@const r = m.boxOffice}
+        {@const last = r.weeks[r.weeks.length - 1]}
+        {@const reveal = openingLine(m)}
+        <div class="reveal {reveal.cls}">
+          <div class="reveal-main">Opened <b>#{r.openingRank}</b>{window ? ` on ${window}` : ''}. {reveal.verdict}</div>
+          {#if r.openingRank && r.openingRank > 1 && r.weeks[0].note?.rivalId}<div class="muted tiny">Behind {titleOf(r.weeks[0].note.rivalId)}.</div>{/if}
         </div>
-        <Chart option={boxOfficeOption(m.boxOffice)} height={200} />
+        <div class="grid grid-3" style="margin:12px 0">
+          <div class="card"><div class="stat-label">Worldwide to date</div><div class="stat-big mono">{formatMoney(r.worldwide)}</div><div class="muted tiny">{formatMoney(r.totalDomestic)} dom · {formatMoney(r.totalInternational)} intl</div></div>
+          <div class="card"><div class="stat-label">This week</div><div class="stat-big mono">#{last.rank}</div><div class="muted tiny">Week {r.weeks.length} · {formatMoney(last.domestic + last.international)} worldwide</div></div>
+          <div class="card"><div class="stat-label">Word of mouth</div><div class="stat-big {WOM_CLASS[last.wom ?? 'building']}">{WOM_LABEL[last.wom ?? 'building']}</div><div class="muted tiny">Critics {m.quality?.criticScore}% · Audience {m.quality?.audienceScore}%</div></div>
+        </div>
+        <Chart option={boxOfficeOption(r)} height={200} />
         <table class="data" style="margin-top:10px">
-          <thead><tr><th>Week</th><th class="num">Domestic</th><th class="num">Change</th><th class="num">International</th><th class="num">Week total</th></tr></thead>
+          <thead><tr><th>Week</th><th class="num">#</th><th class="num">Domestic</th><th class="num">Change</th><th class="num">International</th><th class="num">Week total</th><th>WOM</th><th>What happened</th></tr></thead>
           <tbody>
-            {#each m.boxOffice.weeks as w, i}
-              {@const wow = weekOverWeek(m.boxOffice, i)}
+            {#each r.weeks as w, i}
+              {@const wow = weekOverWeek(r, i)}
               <tr>
                 <td class="muted">Week {i + 1}</td>
+                <td class="num mono">{w.rank ?? '—'}</td>
                 <td class="num mono">{formatMoney(w.domestic)}</td>
                 <td class="num mono" class:good={wow !== null && wow >= 0} class:bad={wow !== null && wow < -0.55}>{wow === null ? '—' : `${wow >= 0 ? '+' : ''}${Math.round(wow * 100)}%`}</td>
                 <td class="num mono">{formatMoney(w.international)}</td>
                 <td class="num mono">{formatMoney(w.domestic + w.international)}</td>
+                <td>{#if w.wom}<span class="tag {WOM_CLASS[w.wom]}">{WOM_LABEL[w.wom]}</span>{/if}</td>
+                <td class="muted small-text">{weekNoteText(w.note, titleOf)}</td>
               </tr>
             {/each}
           </tbody>
         </table>
+        {#if m.reviews}
+          <div class="reviews">
+            {#each m.reviews.critics as c}<div class="quote">“{c.text}” <span class="muted tiny">— {c.outlet}</span></div>{/each}
+            <div class="quote muted">“{m.reviews.audience}” <span class="tiny">— audience</span></div>
+          </div>
+        {/if}
       {/if}
     </section>
   {/each}
 </div>
+
+<style>
+  .reveal { padding: 12px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-2); }
+  .reveal.good { border-color: rgba(95, 201, 141, 0.5); }
+  .reveal.bad { border-color: rgba(224, 101, 101, 0.5); }
+  .reveal.warn { border-color: rgba(233, 160, 75, 0.5); }
+  .reveal-main { font-size: 16px; font-weight: 600; }
+  .reviews { margin-top: 12px; display: grid; gap: 6px; }
+  .quote { font-size: 13px; font-style: italic; }
+</style>
