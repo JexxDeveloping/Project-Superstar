@@ -1823,10 +1823,15 @@ I want movie box office verdicts (similar to how bollywood does it) once the mov
 The verdict measures **recoupment**, not raw gross against production budget. Gross-vs-budget is how people talk, but it can call a money-losing film a Hit (studios keep roughly half of gross, and marketing is paid on top). The Bollywood verdicts these labels come from are profit verdicts — "Hit" means the people who paid for the film made money — so the model follows that intent:
 
 ```
-recoup = (worldwide gross × 0.8) / (production budget + marketing)
+theatrical take = domestic × 0.50 + international × 0.40
+afterlife rate  = 0.30 base, ± up to 0.15 for audience score (30 → −0.15 … 90 → +0.15),
+                  + genre adjustment (Family +0.08, Horror +0.05, Comedy +0.03,
+                    Drama −0.03, Historical/Western −0.05, others 0), clamped 0.10–0.50
+afterlife       = worldwide gross × afterlife rate
+recoup          = (theatrical take + afterlife) / (production budget + marketing)
 ```
 
-The single constant 0.8 folds in the theater split (~50% of gross) plus the ancillary revenue a studio counts on (home/streaming/TV, ~25–30% of theatrical). It is a tunable constant, deliberately not a sub-simulation. It reproduces the real rule of thumb automatically: a medium film with marketing ≈ budget breaks even near **2.5× budget**, a micro-indie with light marketing near **1.6×**, a tentpole near **2.4×** — tier-sensitivity for free, no per-tier curve.
+*(Refined 2026-09-12 from a flat `worldwide × 0.8`.)* The theatrical take is the studio's share of ticket sales — a fact of the business, and lower abroad, honouring Part 1's rule that domestic and international behave differently. The **afterlife** (home release, streaming, TV) is a *result of the film*: it flexes with audience reception and genre, so word of mouth pays twice — at the box office and again afterwards. An average film lands near the old 0.8 of gross overall; a beloved family film reaches ~0.95, a hated period drama ~0.6. All constants are tunable; the model is deliberately not a territory-by-territory sub-simulation. It reproduces the real rule of thumb automatically: a medium film with marketing ≈ budget breaks even near **2.5× budget**, a micro-indie with light marketing near **1.6×**, a tentpole near **2.4×** — tier-sensitivity for free, no per-tier curve. Varying the afterlife by tier or era is a Phase 8 tuning option, not a design change.
 
 **Ladder (strict, non-overlapping, on `recoup`):**
 
