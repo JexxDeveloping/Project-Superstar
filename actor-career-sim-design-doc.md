@@ -1919,6 +1919,12 @@ A headless harness over ~300 films across all six tiers, through the real engine
 
 All threshold and decay numbers are tunable, not final — Phase 8 calibrates them.
 
+### Additions agreed for Phase 4 (2026-09-12)
+
+- **Genre trends that drift over years.** Part 1 lists "industry trends", and the opening model carries a genre-popularity number. Each genre's popularity slowly random-walks over decades (seeded) — a superhero decade, a horror revival, comedy falling out of fashion — feeding the opening's genre factor and the studios' slate choices, so a 40-year career has eras. Phase 4 adds the drift; Phase 5 hangs news on it.
+- **Studio campaign size visible on the board.** Once studios decide marketing spend per film, listings show it as a band — *Campaign: heavy / modest / minimal* — because whether a film will open is real information when choosing between two offers. Fits the information-as-progression principle (Part 2) and needs no new data.
+- **"Opening weekend" as a moment.** One turn is a week, so a film opens during End Week. The tracking report gives the number to beat; the Production screen adds a small reveal — *tracking said $18–26M, it did $31M, that's #1* — the most exciting five seconds in a movie career.
+
 ## ENTITY PROFILE PAGES
 
 Every actor, actress, director, and movie generated in the universe has
