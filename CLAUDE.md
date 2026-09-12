@@ -27,6 +27,7 @@ Where later parts differ from earlier ones, the later part governs.
 - **Phase by phase, per Part 4. Do NOT attempt the whole game in one pass.**
 - Start every new system by confirming the plan, then implement it fully — no stubs, no `// TODO` placeholders standing in for real logic.
 - **Each phase must be runnable before moving to the next.** After a phase, tell me how to run it and what to test.
+- **Version every phase.** The folder is a git repo: at the end of each Part 4 step, commit and tag it `phase-N` (e.g. `phase-2`), so any earlier version can be run again with `git checkout phase-N`. Don't commit mid-phase work-in-progress without saying so.
 - Current phase target: see "Status" at the bottom — update it as phases complete.
 
 ## Non-negotiable rules (these cause silent bugs if broken)
