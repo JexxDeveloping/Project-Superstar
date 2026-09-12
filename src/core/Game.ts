@@ -182,6 +182,7 @@ export class Game {
     // The hot player copy is authoritative; keep the table's row pointing at the same object.
     ws.people.set(state.player.id, state.player);
     if (state.dayJob === undefined) state.dayJob = null;
+    for (const st of ws.studios.values()) if (!st.filmLog) { st.filmLog = []; markDirty(ws, 'studios', st.id); }
     const game = new Game(state, ws, save);
     const repaired = repairWorkingSet(state, ws);
     game.repairedOnLoad = repaired;

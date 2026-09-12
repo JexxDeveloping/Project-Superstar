@@ -6,7 +6,7 @@
  * P feeds *only* the acting side of a career: critical reputation, director trust, skill XP.
  */
 import {
-  PERFORMANCE_LABELS, clamp, type Director, type Genre, type Movie, type PerformanceResult,
+  PERFORMANCE_LABELS, clamp, completedCredits, type Director, type Genre, type Movie, type PerformanceResult,
   type PerformanceScore, type Person, type RoleType, type StatDelta, type WorkingSet,
 } from '../core/GameState';
 import { rngFor } from '../core/RNG';
@@ -79,7 +79,7 @@ export function evaluatePerformance(
   circumstances -= energyPenalty + stressPenalty;
   if (energyPenalty + stressPenalty >= 4) notes.push('Exhaustion and stress blunted the performance.');
 
-  const experience = Math.min(10, person.filmography.length) * 0.6;
+  const experience = Math.min(10, completedCredits(person).length) * 0.6;
   circumstances += experience;
 
   const rng = rngFor(worldSeed, movie.id, week, `performance:${person.id}`);

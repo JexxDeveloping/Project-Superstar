@@ -7,7 +7,7 @@
  * face, so every film is always fully cast.
  */
 import {
-  clamp, fullName, type AuditionListing, type BudgetTier, type CompetitorScore, type Director, type GameState,
+  clamp, completedCredits, fullName, type AuditionListing, type BudgetTier, type CompetitorScore, type Director, type GameState,
   type Id, type Movie, type Person, type Role, type Studio, type WorkingSet, markDirty,
 } from '../core/GameState';
 import { rngFor, type Rng } from '../core/RNG';
@@ -195,7 +195,7 @@ export function roleFit(p: Person, role: Role, movie: Movie, week: number): numb
     fit += (p.attributes.starPower - expected) * (0.2 + expected / 120);
   }
   // Small films are where fresh faces get their first credits.
-  if (expected <= 8 && p.filmography.length < 3) fit += 6;
+  if (expected <= 8 && completedCredits(p).length < 3) fit += 6;
   if (age < role.ageMin) fit -= (role.ageMin - age) * 2;
   if (age > role.ageMax) fit -= (age - role.ageMax) * 2;
   fit += p.momentum * 0.08;

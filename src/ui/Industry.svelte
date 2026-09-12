@@ -4,7 +4,7 @@
   import { dateForWeek, formatDate } from '../core/TimeEngine';
   import { formatMoney } from '../industry/BoxOfficeEngine';
   import { ageInYears, starTier } from '../sim/ActorEngine';
-  import type { Movie, Person } from '../core/GameState';
+  import { completedCredits, type Movie, type Person } from '../core/GameState';
   import type { EChartsOption } from 'echarts';
 
   type Tab = 'boxoffice' | 'movies' | 'people';
@@ -191,7 +191,7 @@
               <td class="num mono">{Math.round(p.attributes.starPower)}</td>
               <td class="num mono">{Math.round(p.attributes.acting)}</td>
               <td class="num mono">{Math.round(p.peakStarPower)}</td>
-              <td class="num">{p.filmography.length}</td>
+              <td class="num">{completedCredits(p).length}</td>
               <td class="num mono">{formatMoney(totalGross(p))}</td>
               <td class="muted tiny">{active ? `${STATUS_LABEL[active.status]} — ${active.title}` : p.status === 'retired' ? 'Retired' : 'Available'}</td>
             </tr>

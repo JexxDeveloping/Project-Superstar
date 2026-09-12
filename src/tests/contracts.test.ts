@@ -7,7 +7,7 @@ import type { BoxOfficeRun, ContractTerms, Movie, Role } from '../core/GameState
 import { computePayout, counterAvailable, counterOffer, generateOffer, salaryGuideline } from '../industry/ContractEngine';
 import { callbackProbability, directOfferChance, findDirectOffer, trackRecord } from '../industry/CastingEngine';
 import { agentEffects, hireAgent, hireBlockedReason } from '../world/AgentEngine';
-import { attachPerson, tickCancellations } from '../industry/MovieEngine';
+import { attachPerson, cancelMovie, tickCancellations } from '../industry/MovieEngine';
 import { DAY_JOBS, dayJobById } from '../sim/ActorEngine';
 import { EventBus } from '../core/EventBus';
 
@@ -246,15 +246,20 @@ describe('Scripts, head-to-head, cancellations, pay-or-play', () => {
     const paid = book(true);
     const unpaid = book(false);
     // Kill both the way the engine does (status + bookkeeping); the orchestrator resolves the player's side next tick.
-    for (const m of [paid, unpaid]) {
-      m.status = 'cancelled'; m.cancelledWeek = s.week; m.cancelledReason = 'financing fell through';
-      for (const c of m.cast) { const p = game.ws.people.get(c.personId)!; p.activeMovieIds = p.activeMovieIds.filter((id) => id !== m.id); }
-    }
+    for (const m of [paid, unpaid]) cancelMovie(s, game.ws, m, 'financing fell through');
     const cashBefore = s.player.cash;
     game.planAction({ type: 'rest' });
     game.endWeek();
     for (const a of s.applications) expect(a.status).toBe('expired');
     expect(paid.id).not.toBe(unpaid.id);
+    // #1: the collapse stays on the record — a 'cancelled' credit, salary = what pay-or-play paid.
+    const paidCredit = s.player.filmography.find((f) => f.movieId === paid.id);
+    const unpaidCredit = s.player.filmography.find((f) => f.movieId === unpaid.id);
+    expect(paidCredit?.status).toBe('cancelled');
+    expect(paidCredit?.salary).toBe(5_000);
+    expect(unpaidCredit?.status).toBe('cancelled');
+    expect(unpaidCredit?.salary).toBe(0);
+    for (const c of paid.cast) if (c.personId !== s.player.id) expect(game.ws.people.get(c.personId)!.filmography.some((f) => f.movieId === paid.id && f.status === 'cancelled')).toBe(true);
     expect(s.trackedMovieIds).toEqual([]);
     expect(s.player.activeMovieIds).toEqual([]);
     expect(s.player.cash).toBe(cashBefore - s.weeklyExpenses + dayJobById(s.dayJob)!.pay + 5_000);

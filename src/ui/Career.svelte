@@ -26,9 +26,9 @@
             <td>{m?.genres.join(' / ')}</td>
             <td class="num mono">{m ? formatMoney(m.budget) : ''}</td>
             <td class="num mono">{done ? formatMoney(m!.boxOffice!.worldwide) : '—'}</td>
-            <td>{done && c.performance ? `${c.performance.score}/5 — ${c.performance.label}` : done ? '—' : 'Unreleased'}</td>
+            <td>{c.status === 'cancelled' ? 'Never shot' : done && c.performance ? `${c.performance.score}/5 — ${c.performance.label}` : done ? '—' : 'Unreleased'}</td>
             <td>{done && m?.quality ? `${m.quality.band} · ${m.quality.criticScore}%` : '—'}</td>
-            <td>{#if done}<span class="tag {['Hit', 'Super Hit', 'Blockbuster', 'All-Time Blockbuster'].includes(m!.boxOffice!.verdict!) ? 'good' : m!.boxOffice!.verdict === 'Average' ? '' : 'bad'}">{m!.boxOffice!.verdict}</span>{:else}<span class="muted">—</span>{/if}</td>
+            <td>{#if c.status === 'cancelled'}<span class="tag bad" title={m?.cancelledReason ?? ''}>Cancelled</span>{:else if done}<span class="tag {['Hit', 'Super Hit', 'Blockbuster', 'All-Time Blockbuster'].includes(m!.boxOffice!.verdict!) ? 'good' : m!.boxOffice!.verdict === 'Average' ? '' : 'bad'}">{m!.boxOffice!.verdict}</span>{:else}<span class="muted">—</span>{/if}</td>
           </tr>
         {/each}
       </tbody>

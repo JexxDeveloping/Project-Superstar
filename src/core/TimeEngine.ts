@@ -193,6 +193,8 @@ export function advanceWeek(state: GameState, ws: WorkingSet, opts: TickOptions 
         const pay = app.contract.terms.baseSalary;
         player.cash += pay;
         player.careerEarnings += pay;
+        const credit = player.filmography.find((f) => f.movieId === movie.id && f.status === 'cancelled');
+        if (credit) credit.salary = pay;
         bus.emit('contract', `${movie.title} collapses — and you get paid anyway`, `Pay-or-play: $${pay.toLocaleString()} for a film that will never shoot (${movie.cancelledReason}).`);
       } else if (wasBooked) {
         bus.emit('casting', `${movie.title} collapses`, `The production is dead: ${movie.cancelledReason}. No shoot, no paycheck.`);
@@ -364,6 +366,7 @@ function resolveRun(state: GameState, ws: WorkingSet, movie: Movie, bus: EventBu
   const quality = movie.quality!;
   const player = state.player;
 
+  let playerTrustDelta = 0;
   for (const c of movie.cast) {
     const person = ws.people.get(c.personId);
     if (!person || !c.performance) continue;
@@ -371,6 +374,7 @@ function resolveRun(state: GameState, ws: WorkingSet, movie: Movie, bus: EventBu
     const fromQuality = qualityImpacts(movie, roleInfluence(c.roleType), quality);
     const fromCommercial = commercialImpacts(movie, c.roleType, run, ws);
     const starBefore = person.attributes.starPower;
+    if (person.isPlayer) playerTrustDelta = fromCommercial.find((d) => d.target === `studio:${movie.studioId}`)?.amount ?? 0;
     applyPerformanceImpacts(person, ws, fromPerformance);
     applyQualityImpacts(person, fromQuality);
     applyCommercialImpacts(person, ws, fromCommercial);
@@ -404,7 +408,7 @@ function resolveRun(state: GameState, ws: WorkingSet, movie: Movie, bus: EventBu
   }
 
   recordDirectorResult(ws, movie);
-  recordStudioResult(ws, movie);
+  recordStudioResult(ws, movie, playerTrustDelta, hasPlayer(movie, player.id));
   completeMovie(ws, movie.id);
 
   const notable = movie.budget >= 40_000_000 || run.worldwide >= 50_000_000 || run.verdict === 'All-Time Blockbuster' || (run.verdict === 'Disaster' && movie.budget >= 10_000_000);

@@ -99,6 +99,12 @@ describe('Living world — 10 idle years', () => {
     expect(cancelled.length / movies.length).toBeLessThan(0.15);
     const dead = new Set(cancelled.map((m) => m.id));
     for (const p of people) for (const id of p.activeMovieIds) expect(dead.has(id)).toBe(false);
+    // #1: every cast member of a collapsed film keeps a 'cancelled' credit.
+    for (const m of cancelled) for (const c of m.cast) expect(game.ws.people.get(c.personId)?.filmography.some((f) => f.movieId === m.id && f.status === 'cancelled')).toBe(true);
+    // #6: studios log every resolved film.
+    const logged = [...game.ws.studios.values()].reduce((n, s) => n + s.filmLog.length, 0);
+    expect(logged).toBe(completed.length);
+    for (const s of game.ws.studios.values()) for (const e of s.filmLog) { expect(game.ws.movies.get(e.movieId)?.boxOffice?.verdict).toBe(e.verdict); expect(e.playerInCast).toBe(false); expect(e.playerTrustDelta).toBe(0); }
     for (const d of game.ws.directors.values()) if (d.activeMovieId) expect(dead.has(d.activeMovieId)).toBe(false);
   });
 

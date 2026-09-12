@@ -63,6 +63,13 @@ export interface FilmCredit {
   performance?: PerformanceResult;
   /** Age when the film's run resolved. */
   ageAtRelease?: number;
+  /** Absent for a completed shoot; 'cancelled' when the production collapsed before cameras rolled. */
+  status?: 'cancelled';
+}
+
+/** Credits that count as experience (a collapsed production is a story, not a film). */
+export function completedCredits(p: { filmography: FilmCredit[] }): FilmCredit[] {
+  return p.filmography.filter((f) => f.status !== 'cancelled');
 }
 
 export interface Person {
@@ -130,6 +137,19 @@ export interface Studio {
   greenlitThisYear: number;
   /** How the studio remembers dealing with the player: 50 neutral; lower = they open lower and walk sooner. */
   dealTemper: number; // 0–100
+  /** Per-film record, appended when each film's run resolves (basis for studio profiles later). */
+  filmLog: StudioFilmLogEntry[];
+}
+
+export interface StudioFilmLogEntry {
+  movieId: Id;
+  week: number;
+  verdict: Verdict;
+  worldwide: number;
+  budget: number;
+  playerInCast: boolean;
+  /** Change to the studio's trust in the player from this film (0 when the player wasn't in it). */
+  playerTrustDelta: number;
 }
 
 export interface Director {

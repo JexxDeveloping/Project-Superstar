@@ -59,9 +59,13 @@ export function greenlightSlates(state: GameState, ws: WorkingSet, bus: EventBus
 }
 
 /** Reputation follows results: prestige studios care about critics, the rest about verdicts. */
-export function recordStudioResult(ws: WorkingSet, movie: Movie): void {
+export function recordStudioResult(ws: WorkingSet, movie: Movie, playerTrustDelta = 0, playerInCast = false): void {
   const s = ws.studios.get(movie.studioId);
   if (!s || !movie.boxOffice?.verdict || !movie.quality) return;
+  s.filmLog.push({
+    movieId: movie.id, week: movie.boxOffice.weeks[movie.boxOffice.weeks.length - 1].week, verdict: movie.boxOffice.verdict,
+    worldwide: movie.boxOffice.worldwide, budget: movie.budget, playerInCast, playerTrustDelta,
+  });
   const rank = VERDICT_RANK[movie.boxOffice.verdict];
   const commercial = 26 + rank * 12; // Average → 50
   const target = s.identity === 'prestige' ? movie.quality.criticScore * 0.6 + commercial * 0.4 : commercial * 0.7 + movie.quality.criticScore * 0.3;

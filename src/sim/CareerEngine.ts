@@ -5,7 +5,7 @@
  * Applies to NPCs and directors every week. The player ages here too, but the player's
  * retirement is voluntary (or the age-75 cap from Part 6) and is handled by Game.
  */
-import { fullName, type GameState, type WorkingSet, markDirty } from '../core/GameState';
+import { completedCredits, fullName, type GameState, type WorkingSet, markDirty } from '../core/GameState';
 import { rngFor } from '../core/RNG';
 import type { EventBus } from '../core/EventBus';
 import { WEEKS_PER_YEAR, ageInYears, starTier } from './ActorEngine';
@@ -49,7 +49,7 @@ export function tickCareers(state: GameState, ws: WorkingSet, bus: EventBus): vo
     if (p.isPlayer || p.status !== 'active') continue;
     if (p.activeMovieIds.length > 0) continue; // finish the film first
     const age = ageInYears(p, week);
-    const chance = actorRetirementChance(age, week - p.lastWorkedWeek, p.attributes.starPower) + hopefulQuitChance(week - p.lastWorkedWeek, p.filmography.length);
+    const chance = actorRetirementChance(age, week - p.lastWorkedWeek, p.attributes.starPower) + hopefulQuitChance(week - p.lastWorkedWeek, completedCredits(p).length);
     if (chance <= 0) continue;
     const rng = rngFor(worldSeed, p.id, week, 'retire');
     if (rng.chance(chance)) {
@@ -57,7 +57,7 @@ export function tickCareers(state: GameState, ws: WorkingSet, bus: EventBus): vo
       p.retiredWeek = week;
       markDirty(ws, 'people', p.id);
       if (p.peakStarPower >= 60) {
-        bus.emit('industry', `${fullName(p)} retires at ${age}`, `A ${starTier(p.peakStarPower)} at their peak, with ${p.filmography.length} film credits.`);
+        bus.emit('industry', `${fullName(p)} retires at ${age}`, `A ${starTier(p.peakStarPower)} at their peak, with ${completedCredits(p).length} film credits.`);
       }
     }
   }

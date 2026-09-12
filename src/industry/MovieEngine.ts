@@ -161,13 +161,29 @@ export function tickCancellations(state: GameState, ws: WorkingSet, bus: EventBu
     if (movie.status !== 'casting' && movie.status !== 'pre-production') continue;
     const rng = rngFor(state.worldSeed, movie.id, state.week, 'cancel');
     if (!rng.chance(CANCEL_CHANCE[movie.budgetTier])) continue;
+    cancelMovie(state, ws, movie, rng.pick(CANCEL_REASONS));
+    out.push(movie);
+    if (movie.budget >= 40_000_000 && !hasPlayer(movie, state.player.id)) {
+      bus.emit('industry', `${movie.title} collapses in pre-production`, `${ws.studios.get(movie.studioId)?.name}'s $${(movie.budget / 1e6).toFixed(0)}M ${movie.genres.join('/')} is dead: ${movie.cancelledReason}.`);
+    }
+  }
+  return out;
+}
+
+/** Kill a production: status, reason, and the bookkeeping on everyone attached (credits included). */
+export function cancelMovie(state: GameState, ws: WorkingSet, movie: Movie, reason: string): void {
+  {
     movie.status = 'cancelled';
     movie.cancelledWeek = state.week;
-    movie.cancelledReason = rng.pick(CANCEL_REASONS);
+    movie.cancelledReason = reason;
     for (const c of movie.cast) {
       const person = ws.people.get(c.personId);
       if (!person) continue;
       person.activeMovieIds = person.activeMovieIds.filter((id) => id !== movie.id);
+      // The collapse stays on the record: a credit that never became a film.
+      if (!person.filmography.some((f) => f.movieId === movie.id)) {
+        person.filmography.push({ movieId: movie.id, characterName: c.characterName, roleType: c.roleType, salary: 0, status: 'cancelled' });
+      }
       markDirty(ws, 'people', person.id);
     }
     const director = ws.directors.get(movie.directorId);
@@ -176,10 +192,5 @@ export function tickCancellations(state: GameState, ws: WorkingSet, bus: EventBu
       markDirty(ws, 'directors', director.id);
     }
     markDirty(ws, 'movies', movie.id);
-    out.push(movie);
-    if (movie.budget >= 40_000_000 && !hasPlayer(movie, state.player.id)) {
-      bus.emit('industry', `${movie.title} collapses in pre-production`, `${ws.studios.get(movie.studioId)?.name}'s $${(movie.budget / 1e6).toFixed(0)}M ${movie.genres.join('/')} is dead: ${movie.cancelledReason}.`);
-    }
   }
-  return out;
 }
