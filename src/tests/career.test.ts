@@ -23,7 +23,7 @@ function playYears(seed: string, years: number) {
       if (app.status === 'audition_pending' && !app.prep) game.choosePrep(app.listingId, 'Practice Scene');
       if (app.status === 'offer' && app.contract?.status === 'open') {
         if (app.contract.round === 0) { try { game.counterOffer(app.listingId, 'higher_salary'); } catch { /* n/a */ } }
-        if (app.contract.status === 'withdrawn') continue;
+        if (app.status !== 'offer') continue; // the studio walked on that ask
         try { game.acceptOffer(app.listingId); } catch { game.declineOffer(app.listingId); }
       }
     }
