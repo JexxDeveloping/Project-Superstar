@@ -32,6 +32,11 @@ function roundMoney(n: number): number {
   return Math.max(step, Math.round(n / step) * step);
 }
 
+/** Union-scale floors: nobody works a speaking part for pocket change, whatever the budget. */
+export const ROLE_SALARY_FLOOR: Record<RoleType, number> = {
+  'Extra': 200, 'Minor': 600, 'Supporting': 1_500, 'Co-Lead': 3_000, 'Lead': 5_000, 'Main Protagonist': 6_000,
+};
+
 /** What an actor of this star power commands for this role, within Part 1's guideline band. */
 export function salaryGuideline(starPower: number, role: Role): number {
   const starFactor = 0.5 + (starPower / 100) * 1.5;
@@ -39,8 +44,8 @@ export function salaryGuideline(starPower: number, role: Role): number {
   // Role size still matters inside the band: a Minor part for an A-lister isn't a lead's paycheck.
   const roleScale = { 'Main Protagonist': 1.1, 'Lead': 1, 'Co-Lead': 0.7, 'Supporting': 0.35, 'Minor': 0.12, 'Extra': 0.03 }[role.roleType];
   const raw = role.salary * starFactor;
-  const floor = band.lo * roleScale;
-  const ceiling = band.hi * roleScale;
+  const floor = Math.max(band.lo * roleScale, ROLE_SALARY_FLOOR[role.roleType]);
+  const ceiling = Math.max(band.hi * roleScale, floor);
   return roundMoney(clamp(raw, floor, ceiling));
 }
 

@@ -160,7 +160,7 @@ export class Game {
     refreshListings(state, ws, bus);
     state.weeklyReport = [{
       week: state.week, category: 'time', title: 'Welcome to the industry',
-      description: `${player.firstName} ${player.lastName}, ${opts.player.background}, arrives with $${player.cash.toLocaleString()} and a dream. Apply to auditions, train, and end the week.`,
+      description: `${player.firstName} ${player.lastName}, ${opts.player.background}, arrives with $${player.cash.toLocaleString()} and a dream. A day job covers most of the rent between shoots. Apply to auditions, train, and end the week.`,
     }, ...bus.events()];
     state.timeline.push(...state.weeklyReport);
     return new Game(state, ws, save);

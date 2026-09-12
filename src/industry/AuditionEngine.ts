@@ -15,7 +15,7 @@ import type { EventBus } from '../core/EventBus';
 import { ageInYears } from '../sim/ActorEngine';
 import { shortlistFor } from './CastingEngine';
 import { agentEffects, agentFor } from '../world/AgentEngine';
-import { recordSigning } from './ContractEngine';
+import { recordSigning, salaryGuideline } from './ContractEngine';
 
 export const OFFER_WINDOW_WEEKS = 2;
 export const MAX_OPEN_LISTINGS = 7;
@@ -158,7 +158,7 @@ export function refreshListings(state: GameState, ws: WorkingSet, bus: EventBus)
         roleId: role.id,
         characterName: role.characterName,
         roleType: role.roleType,
-        expectedSalary: Math.max(100, Math.round(role.salary * (0.5 + (player.attributes.starPower / 100) * 1.5) / 100) * 100),
+        expectedSalary: salaryGuideline(player.attributes.starPower, role),
         difficulty: role.difficulty,
         requiredActing: role.requiredActing,
         preferredGenre: movie.genres[0],

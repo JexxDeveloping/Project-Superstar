@@ -29,7 +29,7 @@
 
 <svelte:window onkeydown={(e) => { if (e.key === 'Escape') close(); }} />
 
-<div class="modal-backdrop" onclick={close} role="presentation">
+<div class="modal-backdrop" onclick={(e) => { if (e.target === e.currentTarget) close(); }} role="presentation">
   <div class="modal" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()} role="dialog" aria-modal="true" tabindex="-1">
     {#if !app || !offer || !movie}
       <p class="muted">This offer is no longer on the table.</p>

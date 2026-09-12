@@ -185,6 +185,8 @@ export const ACTION_COSTS = {
   read_script: { cash: 0, energy: 5, stress: 0 },
 } as const;
 
+/** Bartending, temping, whatever pays: idle weeks bring in a little so a slow start isn't a debt spiral. */
+export const DAY_JOB_INCOME = 200;
 export const PREP_ROLE_BONUS = 3;
 export const PREP_ROLE_CAP = 9;
 
@@ -278,7 +280,8 @@ export function resolvePlayerWeek(state: GameState, bus: EventBus): void {
   p.attributes.fanPopularity = clamp(p.attributes.fanPopularity - fade * 0.8, 1, 100);
   if (p.attributes.starPower > p.peakStarPower) p.peakStarPower = p.attributes.starPower;
 
-  // Living expenses.
+  // Living expenses, offset by a day job in weeks you're not on a set.
+  if (!state.activeProduction) p.cash += DAY_JOB_INCOME;
   p.cash -= state.weeklyExpenses;
   if (p.cash < 0 && p.cash + state.weeklyExpenses >= 0) {
     bus.emit('finance', 'Out of cash', 'Rent came due and the account went into the red. Book work soon.');

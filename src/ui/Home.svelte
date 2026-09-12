@@ -5,7 +5,7 @@
   import { describeTerms } from '../industry/ContractEngine';
   import { GENRES, type Genre, type PlannedAction } from '../core/GameState';
   import { formatDate } from '../core/TimeEngine';
-  import { ACTION_COSTS, starTier } from '../sim/ActorEngine';
+  import { ACTION_COSTS, DAY_JOB_INCOME, starTier } from '../sim/ActorEngine';
   import { formatMoney } from '../industry/BoxOfficeEngine';
 
   const s = $derived(store.state!);
@@ -55,6 +55,7 @@
         {#each topGenres as g}<span class="tag">{g} {Math.round(p.genres[g])}</span>{/each}
       </div>
       <div class="muted tiny" style="margin-top:8px">{p.background} · {p.archetype} · Earnings {formatMoney(p.careerEarnings)} · XP {p.xp}</div>
+      <div class="muted tiny">Rent ${s.weeklyExpenses}/wk · day job +${DAY_JOB_INCOME}/wk between shoots</div>
     </section>
 
     <section class="panel">

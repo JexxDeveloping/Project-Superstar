@@ -8,6 +8,7 @@ import { computePayout, counterAvailable, counterOffer, generateOffer, salaryGui
 import { callbackProbability, directOfferChance, findDirectOffer, trackRecord } from '../industry/CastingEngine';
 import { agentEffects, hireAgent, hireBlockedReason } from '../world/AgentEngine';
 import { attachPerson, tickCancellations } from '../industry/MovieEngine';
+import { DAY_JOB_INCOME } from '../sim/ActorEngine';
 import { EventBus } from '../core/EventBus';
 
 const spec = { firstName: 'Deal', lastName: 'Maker', gender: 'female' as const, background: 'Film Student' as const, archetype: 'Dramatic Performer' as const };
@@ -34,6 +35,11 @@ describe('Salary guidelines (Part 1 scaling)', () => {
     expect(salaryGuideline(92, role(8_000_000, 'Lead'))).toBeGreaterThanOrEqual(12_000_000);
     expect(salaryGuideline(92, role(8_000_000, 'Lead'))).toBeLessThanOrEqual(40_000_000);
     expect(salaryGuideline(82, role(1_200_000, 'Lead'))).toBeGreaterThanOrEqual(1_500_000);
+  });
+  it('never pays a speaking part pocket change', () => {
+    expect(salaryGuideline(5, role(240, 'Minor'))).toBeGreaterThanOrEqual(600);
+    expect(salaryGuideline(5, role(750, 'Supporting'))).toBeGreaterThanOrEqual(1_500);
+    expect(salaryGuideline(5, role(3_000, 'Lead'))).toBeGreaterThanOrEqual(5_000);
   });
   it('scales down for smaller parts inside the band', () => {
     expect(salaryGuideline(85, role(8_000_000 * 0.08, 'Minor'))).toBeLessThan(salaryGuideline(85, role(8_000_000, 'Lead')));
@@ -251,7 +257,7 @@ describe('Scripts, head-to-head, cancellations, pay-or-play', () => {
     expect(paid.id).not.toBe(unpaid.id);
     expect(s.trackedMovieIds).toEqual([]);
     expect(s.player.activeMovieIds).toEqual([]);
-    expect(s.player.cash).toBe(cashBefore - s.weeklyExpenses + 5_000);
+    expect(s.player.cash).toBe(cashBefore - s.weeklyExpenses + DAY_JOB_INCOME + 5_000);
     expect(s.weeklyReport.some((e) => e.title.includes('get paid anyway'))).toBe(true);
     expect(s.weeklyReport.some((e) => e.description.includes('No shoot, no paycheck'))).toBe(true);
     void tickCancellations; void EventBus;

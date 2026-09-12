@@ -25,6 +25,8 @@ const SKIP_MAX_WEEKS = 26;
 class GameStore {
   state = $state.raw<GameState | null>(null);
   world = $state.raw<WorldView | null>(null);
+  /** Bumped on every refresh; screens are keyed on it so in-place entity changes always render. */
+  version = $state(0);
   actionsRemaining = $state(0);
   busy = $state(false);
   error = $state<string | null>(null);
@@ -100,6 +102,9 @@ class GameStore {
   async skipToEvent(): Promise<void> {
     await this.run(async () => {
       const game = this.game!;
+      if (needsPlayer(game.state) && !game.state.weeklyReport.some((e) => e.category === 'release' || e.title.includes('starts filming') || e.title.includes('wraps') || e.title.includes('opening weekend'))) {
+        throw new Error('Something needs your answer first — an audition to prepare, an offer, or an agent. Use End Week to advance anyway.');
+      }
       await this.persistChain;
       for (let i = 0; i < SKIP_MAX_WEEKS; i++) {
         game.endWeek();
@@ -191,6 +196,7 @@ class GameStore {
       people: game.ws.people,
     };
     this.actionsRemaining = game.actionsRemaining;
+    this.version += 1;
   }
 }
 

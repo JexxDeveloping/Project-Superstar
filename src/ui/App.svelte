@@ -50,6 +50,7 @@
         <button class="nav ghost" onclick={() => store.quitToMenu()}>Save & quit</button>
       </nav>
       <main class="main">
+        {#key store.version}
         {#if store.screen === 'home'}<Home />
         {:else if store.screen === 'auditions'}<Auditions />
         {:else if store.screen === 'scripts'}<Scripts />
@@ -57,10 +58,12 @@
         {:else if store.screen === 'career'}<Career />
         {:else if store.screen === 'industry'}<Industry />
         {:else}<Timeline />{/if}
+        {/key}
       </main>
     </div>
   </div>
 
+  {#key store.version}
   {#if store.state.pendingResults.length > 0}
     <ResultScreen result={store.state.pendingResults[0]} />
   {:else if store.openContractListingId}
@@ -68,6 +71,7 @@
   {:else if store.openListingId}
     <AuditionModal listingId={store.openListingId} />
   {/if}
+  {/key}
 {/if}
 
 {#if store.error}

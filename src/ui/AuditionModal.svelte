@@ -35,7 +35,7 @@
 
 <svelte:window onkeydown={(e) => { if (e.key === 'Escape') close(); }} />
 
-<div class="modal-backdrop" onclick={close} role="presentation">
+<div class="modal-backdrop" onclick={(e) => { if (e.target === e.currentTarget) close(); }} role="presentation">
   <div class="modal" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()} role="dialog" aria-modal="true" tabindex="-1">
     {#if !listing || !movie}
       <p class="muted">This listing has closed.</p>
@@ -100,7 +100,7 @@
               <div><strong>{listing.roleType}</strong> · opening at {formatMoney(app.contract?.terms.baseSalary ?? listing.expectedSalary)} · {movie.productionWeeks}-week shoot from {formatDate(movie.productionStartWeek, s.epochYear)}</div>
               <div class="row">
                 <button class="danger ghost" onclick={() => { store.declineOffer(listingId); close(); }}>Decline</button>
-                <button class="primary" onclick={() => { close(); store.openContractListingId = listingId; }}>Review the deal ▸</button>
+                <button class="primary" onclick={() => { const id = listingId; close(); store.openContractListingId = id; }}>Review the deal ▸</button>
               </div>
             </div>
             <div class="muted tiny" style="margin-top:6px">Offer lapses {formatDate(app.offerExpiresWeek!, s.epochYear)}.</div>
