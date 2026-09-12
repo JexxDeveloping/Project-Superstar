@@ -47,3 +47,45 @@ describe('SaveEngine — Dexie persistence', () => {
     save.close();
   });
 });
+
+describe('SaveEngine — persistence under interleaving and repair', () => {
+  it('records marked dirty while a save is in flight are not lost', async () => {
+    const save = new SaveEngine('test-db-race');
+    const game = await Game.createAndSave({ player: spec, seed: 'race-1', prehistoryWeeks: 20 }, save);
+    // Start a save (dirty set non-empty), then tick while it is still writing.
+    game.state.player.cash += 1;
+    game.ws.dirty.people.add(game.state.player.id);
+    const inFlight = game.persist();
+    game.endWeek();
+    game.endWeek();
+    await inFlight;
+    await game.persist();
+    const loaded = (await Game.load(save, game.state.universeId))!;
+    // Every director and cast member referenced by a movie must exist on disk (no repair needed).
+    for (const m of loaded.ws.movies.values()) {
+      expect(loaded.ws.directors.has(m.directorId)).toBe(true);
+      for (const c of m.cast) expect(loaded.ws.people.has(c.personId)).toBe(true);
+    }
+    expect(loaded.ws.directors.size).toBe(game.ws.directors.size);
+    expect(loaded.ws.people.size).toBe(game.ws.people.size);
+    save.close();
+  });
+
+  it('repairs a save with a missing director and cast member on load', async () => {
+    const save = new SaveEngine('test-db-repair');
+    const game = await Game.createAndSave({ player: spec, seed: 'repair-1', prehistoryWeeks: 20 }, save);
+    const movie = [...game.ws.movies.values()].find((m) => m.cast.length > 0)!;
+    // Punch holes the way the old race did: rows that never reached the DB.
+    await save.deleteRows({ directors: [movie.directorId], people: [movie.cast[0].personId] });
+    const loaded = (await Game.load(save, game.state.universeId))!;
+    expect(loaded.ws.directors.has(movie.directorId)).toBe(true);
+    expect(loaded.ws.people.has(movie.cast[0].personId)).toBe(true);
+    // The repaired rows were persisted, so a second load is whole without repair.
+    const again = (await Game.load(save, game.state.universeId))!;
+    expect(again.ws.directors.has(movie.directorId)).toBe(true);
+    // And the week can advance.
+    again.planAction({ type: 'rest' });
+    expect(() => again.endWeek()).not.toThrow();
+    save.close();
+  });
+});

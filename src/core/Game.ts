@@ -20,6 +20,8 @@ import { seedUniverse } from '../world/IndustryEngine';
 import { acceptOffer, applyBlockedReason, declineOffer, findListing, refreshListings, setPrep } from '../industry/AuditionEngine';
 import { attachPerson } from '../industry/MovieEngine';
 import { SAVE_VERSION, type SaveEngine } from '../meta/SaveEngine';
+import { generateActor, takenNames } from '../sim/NPCEngine';
+import { generateDirector } from '../world/DirectorEngine';
 
 export const EPOCH_YEAR = 2028;
 /** Week 8 of 2028 = March, week 1 (4-4-5 calendar). */
@@ -42,9 +44,49 @@ export interface NewGameOptions {
   prehistoryWeeks?: number;
 }
 
+/**
+ * Fill holes in a loaded universe: a film whose director or cast member is missing from the
+ * tables gets a regenerated stand-in under the same id (deterministic per world seed), and hot
+ * state pointing at films that no longer exist is dropped. Returns how many records were rebuilt.
+ * Saves written before the persist race was fixed can have such holes; new saves should not.
+ */
+export function repairWorkingSet(state: GameState, ws: WorkingSet): number {
+  let repaired = 0;
+  const names = takenNames(ws);
+  const weekFromId = (id: Id): number => {
+    const m = /^[dp]-(-?\d+)-/.exec(id);
+    return m ? Number(m[1]) : state.week;
+  };
+  for (const movie of ws.movies.values()) {
+    if (!ws.directors.has(movie.directorId)) {
+      const d = generateDirector(state.universeId, state.worldSeed, weekFromId(movie.directorId), movie.directorId, 'working', names);
+      ws.directors.set(d.id, d);
+      markDirty(ws, 'directors', d.id);
+      repaired += 1;
+    }
+    for (const c of movie.cast) {
+      if (ws.people.has(c.personId)) continue;
+      const p = generateActor(state.universeId, state.worldSeed, weekFromId(c.personId), c.personId, 'working', names);
+      if (movie.status === 'casting' || movie.status === 'pre-production' || movie.status === 'filming') p.activeMovieIds.push(movie.id);
+      ws.people.set(p.id, p);
+      markDirty(ws, 'people', p.id);
+      repaired += 1;
+    }
+  }
+  const before = state.listings.length + state.applications.length + state.trackedMovieIds.length;
+  state.listings = state.listings.filter((l) => ws.movies.has(l.movieId));
+  state.applications = state.applications.filter((a) => ws.movies.has(a.movieId));
+  state.trackedMovieIds = state.trackedMovieIds.filter((id) => ws.movies.has(id));
+  if (state.activeProduction && !ws.movies.has(state.activeProduction.movieId)) state.activeProduction = null;
+  repaired += before - (state.listings.length + state.applications.length + state.trackedMovieIds.length);
+  return repaired;
+}
+
 export class Game {
   readonly state: GameState;
   readonly ws: WorkingSet;
+  /** Records rebuilt by `repairWorkingSet` when this session was loaded (0 for a healthy save). */
+  repairedOnLoad = 0;
   private readonly save: SaveEngine | null;
 
   private constructor(state: GameState, ws: WorkingSet, save: SaveEngine | null) {
@@ -117,7 +159,11 @@ export class Game {
     const ws = await save.loadWorkingSet(universeId);
     // The hot player copy is authoritative; keep the table's row pointing at the same object.
     ws.people.set(state.player.id, state.player);
-    return new Game(state, ws, save);
+    const game = new Game(state, ws, save);
+    const repaired = repairWorkingSet(state, ws);
+    game.repairedOnLoad = repaired;
+    if (repaired > 0) await game.persist();
+    return game;
   }
 
   // --- commands (synchronous, validated) ----------------------------------------

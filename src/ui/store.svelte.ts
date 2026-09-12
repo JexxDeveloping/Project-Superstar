@@ -36,6 +36,8 @@ class GameStore {
   private game: Game | null = null;
   private readonly save = new SaveEngine();
   private errorTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Saves run strictly one after another, in the order they were requested. */
+  private persistChain: Promise<void> = Promise.resolve();
 
   // --- lifecycle ------------------------------------------------------------
 
@@ -60,6 +62,7 @@ class GameStore {
       this.game = game;
       this.screen = 'home';
       this.refresh();
+      if (game.repairedOnLoad > 0) this.showError(`Save repaired: ${game.repairedOnLoad} missing record${game.repairedOnLoad === 1 ? '' : 's'} rebuilt.`);
     });
   }
 
@@ -71,7 +74,7 @@ class GameStore {
   }
 
   async quitToMenu(): Promise<void> {
-    if (this.game) await this.game.persist();
+    if (this.game) await this.enqueuePersist();
     this.game = null;
     this.state = null;
     this.world = null;
@@ -82,9 +85,10 @@ class GameStore {
 
   async endWeek(): Promise<void> {
     await this.run(async () => {
+      await this.persistChain;
       this.game!.endWeek();
-      await this.game!.persist();
       this.refresh();
+      await this.enqueuePersist();
     });
   }
 
@@ -92,12 +96,13 @@ class GameStore {
   async skipToEvent(): Promise<void> {
     await this.run(async () => {
       const game = this.game!;
+      await this.persistChain;
       for (let i = 0; i < SKIP_MAX_WEEKS; i++) {
         game.endWeek();
         if (needsPlayer(game.state) || nothingInMotion(game.state)) break;
       }
-      await game.persist();
       this.refresh();
+      await this.enqueuePersist();
     });
   }
 
@@ -125,10 +130,18 @@ class GameStore {
     try {
       fn();
       this.refresh();
-      void this.game.persist();
+      void this.enqueuePersist();
     } catch (e) {
       this.showError(e);
     }
+  }
+
+  private enqueuePersist(): Promise<void> {
+    const game = this.game;
+    if (!game) return Promise.resolve();
+    const next = this.persistChain.then(() => game.persist()).catch((e) => this.showError(e));
+    this.persistChain = next;
+    return next;
   }
 
   private async run(fn: () => Promise<void>): Promise<void> {

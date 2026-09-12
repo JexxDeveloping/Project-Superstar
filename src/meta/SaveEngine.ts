@@ -125,25 +125,41 @@ export class SaveEngine {
     clearDirty(ws);
   }
 
-  /** Write only records marked dirty during the tick, then clear the marks. */
+  /**
+   * Write only records marked dirty, then clear the marks.
+   *
+   * The snapshot is taken and the marks are cleared *synchronously, before any await*. A tick
+   * that runs while the write is in flight marks fresh records, and those must survive — clearing
+   * after the await would wipe them without ever writing them (that bug lost directors/newcomers
+   * from saves). If the write fails, the snapshot's ids are re-marked so the next persist retries.
+   */
   async persistDeltas(ws: WorkingSet): Promise<void> {
-    const pick = <T>(map: Map<Id, T>, ids: Set<Id>): T[] => {
-      const out: T[] = [];
-      for (const id of ids) { const v = map.get(id); if (v) out.push(structuredClone(v)); }
-      return out;
+    const take = <T>(map: Map<Id, T>, ids: Set<Id>): { rows: T[]; ids: Id[] } => {
+      const rows: T[] = [];
+      const taken: Id[] = [];
+      for (const id of ids) { const v = map.get(id); if (v) { rows.push(structuredClone(v)); taken.push(id); } }
+      return { rows, ids: taken };
     };
-    const people = pick(ws.people, ws.dirty.people);
-    const movies = pick(ws.movies, ws.dirty.movies);
-    const studios = pick(ws.studios, ws.dirty.studios);
-    const directors = pick(ws.directors, ws.dirty.directors);
-    if (people.length + movies.length + studios.length + directors.length === 0) return;
-    await this.db.transaction('rw', [this.db.people, this.db.movies, this.db.studios, this.db.directors], async () => {
-      if (people.length) await this.db.people.bulkPut(people);
-      if (movies.length) await this.db.movies.bulkPut(movies);
-      if (studios.length) await this.db.studios.bulkPut(studios);
-      if (directors.length) await this.db.directors.bulkPut(directors);
-    });
+    const people = take(ws.people, ws.dirty.people);
+    const movies = take(ws.movies, ws.dirty.movies);
+    const studios = take(ws.studios, ws.dirty.studios);
+    const directors = take(ws.directors, ws.dirty.directors);
     clearDirty(ws);
+    if (people.rows.length + movies.rows.length + studios.rows.length + directors.rows.length === 0) return;
+    try {
+      await this.db.transaction('rw', [this.db.people, this.db.movies, this.db.studios, this.db.directors], async () => {
+        if (people.rows.length) await this.db.people.bulkPut(people.rows);
+        if (movies.rows.length) await this.db.movies.bulkPut(movies.rows);
+        if (studios.rows.length) await this.db.studios.bulkPut(studios.rows);
+        if (directors.rows.length) await this.db.directors.bulkPut(directors.rows);
+      });
+    } catch (e) {
+      for (const id of people.ids) ws.dirty.people.add(id);
+      for (const id of movies.ids) ws.dirty.movies.add(id);
+      for (const id of studios.ids) ws.dirty.studios.add(id);
+      for (const id of directors.ids) ws.dirty.directors.add(id);
+      throw e;
+    }
   }
 
   // --- lifecycle ------------------------------------------------------------
@@ -156,6 +172,13 @@ export class SaveEngine {
       await this.db.directors.where('universeId').equals(universeId).delete();
       await this.db.saves.delete(universeId);
     });
+  }
+
+  /** Test hook: remove specific rows (simulates a save with holes). */
+  async deleteRows(rows: { directors?: Id[]; people?: Id[]; movies?: Id[] }): Promise<void> {
+    if (rows.directors?.length) await this.db.directors.bulkDelete(rows.directors);
+    if (rows.people?.length) await this.db.people.bulkDelete(rows.people);
+    if (rows.movies?.length) await this.db.movies.bulkDelete(rows.movies);
   }
 
   async countMovies(universeId: Id): Promise<number> {
