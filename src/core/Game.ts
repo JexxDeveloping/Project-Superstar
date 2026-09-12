@@ -1,0 +1,205 @@
+/**
+ * Game — the headless session facade.
+ *
+ * Everything outside the engines (the Svelte UI, tests, a future Worker host) talks to a Game:
+ *   - create / load a universe
+ *   - issue player commands (plan actions, choose prep, answer offers)
+ *   - `endWeek()` — the synchronous tick — followed by `persist()`
+ *
+ * No DOM, no framework. SaveEngine is optional so tests can run fully in memory.
+ */
+import {
+  createWorkingSet, markDirty, type GameState, type Id, type PlannedAction, type PrepChoice,
+  type TimelineEvent, type WorkingSet,
+} from './GameState';
+import { seedFromString } from './RNG';
+import { advanceWeek } from './TimeEngine';
+import { EventBus } from './EventBus';
+import { ACTION_COSTS, createPlayer, type PlayerSpec } from '../sim/ActorEngine';
+import { seedUniverse } from '../world/IndustryEngine';
+import { acceptOffer, applyBlockedReason, declineOffer, refreshListings, setPrep } from '../industry/AuditionEngine';
+import { attachPerson } from '../industry/MovieEngine';
+import { SAVE_VERSION, type SaveEngine } from '../meta/SaveEngine';
+
+export const EPOCH_YEAR = 2028;
+/** Week 8 of 2028 = March, week 1 (4-4-5 calendar). */
+export const START_WEEK = 8;
+/** The world runs this long on its own before the player enters. */
+export const PREHISTORY_WEEKS = 52;
+export const ACTIONS_PER_WEEK = 3;
+export const WEEKLY_EXPENSES = 250;
+
+function actionCash(action: PlannedAction): number {
+  return ACTION_COSTS[action.type].cash;
+}
+
+export interface NewGameOptions {
+  player: PlayerSpec;
+  /** Human-readable seed; the same seed replays identically. */
+  seed: string;
+  universeId?: Id;
+  /** Override the prehistory length (tests). */
+  prehistoryWeeks?: number;
+}
+
+export class Game {
+  readonly state: GameState;
+  readonly ws: WorkingSet;
+  private readonly save: SaveEngine | null;
+
+  private constructor(state: GameState, ws: WorkingSet, save: SaveEngine | null) {
+    this.state = state;
+    this.ws = ws;
+    this.save = save;
+  }
+
+  // --- lifecycle ------------------------------------------------------------
+
+  /** Build a fresh universe in memory, run its prehistory, then seat the player. Deterministic for (seed, spec). */
+  static create(opts: NewGameOptions, save: SaveEngine | null = null): Game {
+    const worldSeed = seedFromString(opts.seed);
+    const universeId = opts.universeId ?? `u-${worldSeed.toString(36)}`;
+    const prehistory = opts.prehistoryWeeks ?? PREHISTORY_WEEKS;
+    const worldStart = START_WEEK - prehistory;
+
+    const ws = createWorkingSet();
+    const seed = seedUniverse(universeId, worldSeed, worldStart);
+    for (const s of seed.studios) ws.studios.set(s.id, s);
+    for (const d of seed.directors) ws.directors.set(d.id, d);
+    for (const p of seed.people) ws.people.set(p.id, p);
+
+    const player = createPlayer(universeId, worldSeed, START_WEEK, opts.player);
+    const state: GameState = {
+      saveVersion: SAVE_VERSION,
+      universeId,
+      worldSeed,
+      week: worldStart,
+      epochYear: EPOCH_YEAR,
+      player,
+      actionsPerWeek: ACTIONS_PER_WEEK,
+      weekPlan: [],
+      listings: [],
+      applications: [],
+      activeProduction: null,
+      trackedMovieIds: [],
+      pendingResults: [],
+      weeklyReport: [],
+      timeline: [],
+      weeklyExpenses: WEEKLY_EXPENSES,
+      genCounter: seed.genCounter,
+    };
+
+    // The world existed before you: studios slate, films shoot and open, careers move.
+    for (let i = 0; i < prehistory; i++) advanceWeek(state, ws, { worldOnly: true });
+
+    ws.people.set(player.id, player);
+    const bus = new EventBus(state.week);
+    refreshListings(state, ws, bus);
+    state.weeklyReport = [{
+      week: state.week, category: 'time', title: 'Welcome to the industry',
+      description: `${player.firstName} ${player.lastName}, ${opts.player.background}, arrives with $${player.cash.toLocaleString()} and a dream. Apply to auditions, train, and end the week.`,
+    }, ...bus.events()];
+    state.timeline.push(...state.weeklyReport);
+    return new Game(state, ws, save);
+  }
+
+  /** Create and persist a new universe. */
+  static async createAndSave(opts: NewGameOptions, save: SaveEngine): Promise<Game> {
+    const game = Game.create(opts, save);
+    await save.persistAll(game.ws);
+    await save.saveHot(game.state);
+    return game;
+  }
+
+  static async load(save: SaveEngine, universeId: Id): Promise<Game | null> {
+    const state = await save.loadHot(universeId);
+    if (!state) return null;
+    const ws = await save.loadWorkingSet(universeId);
+    // The hot player copy is authoritative; keep the table's row pointing at the same object.
+    ws.people.set(state.player.id, state.player);
+    return new Game(state, ws, save);
+  }
+
+  // --- commands (synchronous, validated) ----------------------------------------
+
+  get actionsRemaining(): number {
+    return this.state.actionsPerWeek - this.state.weekPlan.length;
+  }
+
+  planAction(action: PlannedAction): void {
+    if (this.actionsRemaining <= 0) throw new Error('No actions left this week.');
+    if (action.type === 'apply') {
+      const reason = applyBlockedReason(this.state, action.listingId);
+      if (reason) throw new Error(reason);
+    }
+    if (action.type === 'rest' && this.state.weekPlan.some((a) => a.type === 'rest')) {
+      throw new Error('Resting twice in a week does nothing extra.');
+    }
+    const cost = this.plannedCost() + actionCash(action);
+    if (actionCash(action) > 0 && cost > this.state.player.cash) {
+      throw new Error(`Not enough cash — this costs $${actionCash(action)} and you have $${Math.max(0, this.state.player.cash - this.plannedCost()).toLocaleString()} unallocated.`);
+    }
+    this.state.weekPlan.push(action);
+  }
+
+  /** Cash already committed by this week's plan. */
+  plannedCost(): number {
+    return this.state.weekPlan.reduce((s, a) => s + actionCash(a), 0);
+  }
+
+  unplanAction(index: number): void {
+    this.state.weekPlan.splice(index, 1);
+  }
+
+  choosePrep(listingId: Id, prep: PrepChoice): void {
+    setPrep(this.state, listingId, prep);
+  }
+
+  acceptOffer(listingId: Id): void {
+    const { listing } = acceptOffer(this.state, listingId);
+    const movie = this.ws.movies.get(listing.movieId);
+    const role = movie?.roles.find((r) => r.id === listing.roleId);
+    if (!movie || !role) throw new Error('That role no longer exists.');
+    if (role.castPersonId) throw new Error('The role has already been cast.');
+    attachPerson(this.ws, movie, this.state.player, role, listing.expectedSalary);
+    this.state.trackedMovieIds.push(movie.id);
+    // Other live offers can't be honoured alongside a booking this phase.
+    for (const app of this.state.applications) {
+      if (app.status === 'offer' && app.listingId !== listingId) app.status = 'declined';
+    }
+    this.state.weeklyReport.push({
+      week: this.state.week, category: 'casting', title: `Booked: ${listing.characterName}`,
+      description: `You accepted the ${listing.roleType} role in ${movie.title}. Filming starts in ${Math.max(0, movie.productionStartWeek - this.state.week)} weeks.`,
+    });
+  }
+
+  declineOffer(listingId: Id): void {
+    declineOffer(this.state, listingId);
+  }
+
+  dismissResult(): void {
+    this.state.pendingResults.shift();
+  }
+
+  // --- the turn --------------------------------------------------------------
+
+  /** Advance one week. Synchronous; no I/O. Call `persist()` afterwards. */
+  endWeek(): TimelineEvent[] {
+    return advanceWeek(this.state, this.ws);
+  }
+
+  /** Persist hot state + dirty entities. No-op when running headless. */
+  async persist(): Promise<void> {
+    if (!this.save) return;
+    markDirty(this.ws, 'people', this.state.player.id);
+    await this.save.persistDeltas(this.ws);
+    await this.save.saveHot(this.state);
+  }
+
+  /** Convenience for hosts: tick then persist. */
+  async endWeekAndPersist(): Promise<TimelineEvent[]> {
+    const events = this.endWeek();
+    await this.persist();
+    return events;
+  }
+}
