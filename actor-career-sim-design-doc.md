@@ -1848,7 +1848,7 @@ The single constant 0.8 folds in the theater split (~50% of gross) plus the anci
 
 ## ENTITY PROFILE PAGES
 
-Every actor, actress, director, writer, and movie generated in the universe has
+Every actor, actress, director, and movie generated in the universe has
 its own clickable profile page that displays that entity's full recorded history.
 This is the payoff of the persistent-world + Dexie design (Part 5): the data is
 already stored per entity; these pages are the views onto it. The goal is
@@ -1866,16 +1866,16 @@ and Movies tables, and are linked from every place an entity's name appears
 name on one profile opens that entity's profile (movie -> cast member -> their
 filmography -> another movie, etc.).
 
-### PERSON PROFILE (actor / actress / director / writer)
+### PERSON PROFILE (actor / actress / director)
 
-- Header: portrait/avatar, name, role label (e.g. Actor, Director, Writer), age.
+- Header: portrait/avatar, name, role label (e.g. Actor, Director), age.
 - Summary stats: Career Earnings, Cumulative Box Office, Overall rating,
   Average Review (career critic average).
 - Ratings block (adapts to role type):
   - Actors/actresses: per-genre acting skills (Drama, Action, Comedy, Romance,
     etc.) plus core attributes (Star Power, Charisma, etc.), and Chemistry /
     Content flags.
-  - Directors/writers: craft ratings (Directing, Leadership, Pacing, Style, etc.)
+  - Directors: craft ratings (Directing, Leadership, Pacing, Style, etc.)
     plus Star Power / reputation.
 - Filmography ("Movies"): paginated list of every film the entity worked on,
   each row showing icon, title, release status or date, studio, that entity's
@@ -1893,16 +1893,15 @@ filmography -> another movie, etc.).
   Plot Arc, Rating, Runtime, and Franchise/Brand if part of one.
 - Box-office verdict: display the Part 3 verdict label (Disaster ... All-Time
   Blockbuster) once the theatrical run is complete.
-- Writer: name + stats (box-office %, salary, movie count, avg review, cumulative
+- Director: name + stats (box-office %, salary, movie count, avg review, cumulative
   box office), linking to that person's profile.
-- Director: same treatment.
 - Cast: each member with name, role type (Leading Actor/Actress, Supporting,
   etc.), box-office %, salary, movie count, review, and box office, each linking
   to that person's profile.
 - Awards: list, or "No awards found."
-- Budget breakdown: Pre-production (writer), Production (cast, director),
-  Post-production (marketing), allocated box-office %, and totals shown both
-  without ads and with ads (production cost vs. total cost).
+- Budget breakdown: Production (cast, director), Post-production (marketing),
+  allocated box-office %, and totals shown both without ads and with ads
+  (production cost vs. total cost).
 - Box office: week-by-week gross for the full theatrical run, First Week and
   Total figures, and a bar chart of the weekly decline (ECharts).
 
@@ -1926,6 +1925,7 @@ The 14-step content order in Part 1 remains the reference. This is the practical
 2. Procedural movie/NPC generation + the living-world weekly tick.
 3. Full casting/audition probability + contracts + negotiation.
 4. Box office engine (the hard math) + release calendar competition.
+   *Phase 4 notes:* store running cumulative box office + average review on each person record instead of computing on the fly. Add movie metadata fields: Type (animation/live-action), Plot Arc, Rating, Runtime, Plot summary — required by the Movie Profile page.
 5. Perception, typecasting, rivalries, relationships, news.
 6. Awards, finances, milestones, scandals.
    *Note for phases 2–6:* Persist per-entity history as it is generated (each movie's weekly box office, each person's per-film result, cumulative gross, avg review) to the entity's Dexie record — do not compute-and-discard. Required by the Entity Profile Pages in Part 3.
