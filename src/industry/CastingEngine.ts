@@ -231,3 +231,23 @@ export function closeCasting(state: GameState, movie: Movie, ws: WorkingSet, bus
   }
   markDirty(ws, 'movies', movie.id);
 }
+
+/** The player couldn't make the shoot: drop them from the film and recast the part. */
+export function replacePlayer(state: GameState, movie: Movie, ws: WorkingSet, bus: EventBus): void {
+  const player = state.player;
+  const role = movie.roles.find((r) => r.castPersonId === player.id);
+  movie.cast = movie.cast.filter((c) => c.personId !== player.id);
+  player.activeMovieIds = player.activeMovieIds.filter((id) => id !== movie.id);
+  state.trackedMovieIds = state.trackedMovieIds.filter((id) => id !== movie.id);
+  for (const app of state.applications) {
+    if (app.movieId === movie.id && (app.status === 'booked' || app.status === 'offer')) app.status = 'expired';
+  }
+  let replacement: Person | undefined;
+  if (role) {
+    role.castPersonId = undefined;
+    replacement = castRole(state, movie, role, ws);
+  }
+  markDirty(ws, 'movies', movie.id);
+  markDirty(ws, 'people', player.id);
+  bus.emit('casting', `Replaced on ${movie.title}`, `The production couldn't wait any longer${replacement ? ` — ${fullName(replacement)} takes the part` : ''}. Your other shoot came first.`);
+}

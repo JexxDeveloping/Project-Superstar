@@ -15,8 +15,8 @@ import { ageInYears, resolvePlayerWeek, starTier, WEEKS_PER_YEAR } from '../sim/
 import { npcWeeklyDrift } from '../sim/NPCEngine';
 import { tickCareers } from '../sim/CareerEngine';
 import { OFFER_WINDOW_WEEKS, findListing, performAudition, refreshListings, resolveApplications } from '../industry/AuditionEngine';
-import { closeCasting, decideCallback, resolveCasting } from '../industry/CastingEngine';
-import { completeMovie, hasPlayer, roleInfluence, tickMovies, wrapMovie } from '../industry/MovieEngine';
+import { closeCasting, decideCallback, replacePlayer, resolveCasting } from '../industry/CastingEngine';
+import { MAX_HOLD_WEEKS, completeMovie, hasPlayer, roleInfluence, tickMovies, wrapMovie } from '../industry/MovieEngine';
 import { startProduction, tickProduction } from '../industry/ProductionEngine';
 import {
   applyPerformanceImpacts, evaluatePerformance, npcPerformanceContext, performanceImpacts, type PerformanceContext,
@@ -126,20 +126,43 @@ export function advanceWeek(state: GameState, ws: WorkingSet, opts: TickOptions 
   if (!worldOnly) refreshListings(state, ws, bus);
 
   // 3. Movie calendar for the whole industry: shoots start, NPC shoots wrap, films open.
+  const beginPlayerShoot = (movie: Movie): boolean => {
+    if (state.activeProduction) return false;
+    const app = state.applications.find((a) => a.status === 'booked' && a.movieId === movie.id);
+    const role = movie.roles.find((r) => r.castPersonId === player.id);
+    const entry = movie.cast.find((c) => c.personId === player.id);
+    if (!app || !role || !entry) return false;
+    startProduction(state, movie, app, role, entry.salary);
+    app.status = 'in_production';
+    return true;
+  };
   const transitions = tickMovies(state, ws, bus);
+  // Player films in a stable order so the same save always starts the same one first.
+  const ready = transitions.filter((t) => t.to === 'player-ready').map((t) => ws.movies.get(t.movieId)!)
+    .sort((a, b) => a.productionStartWeek - b.productionStartWeek || (a.id < b.id ? -1 : 1));
+  for (const movie of ready) {
+    if (!state.activeProduction && beginPlayerShoot(movie)) {
+      movie.status = 'filming';
+      markDirty(ws, 'movies', movie.id);
+      bus.emit('production', `${movie.title} starts filming`, `Principal photography begins — ${movie.productionWeeks} weeks scheduled.`);
+      continue;
+    }
+    // On another set: the production pushes its start, then gives up and recasts.
+    movie.holdWeeks = (movie.holdWeeks ?? 0) + 1;
+    movie.productionStartWeek = week + 1;
+    markDirty(ws, 'movies', movie.id);
+    if (movie.holdWeeks > MAX_HOLD_WEEKS) {
+      replacePlayer(state, movie, ws, bus);
+      movie.productionStartWeek = week;
+      movie.status = 'filming';
+    } else {
+      bus.emit('production', `${movie.title} is waiting for you`, `The shoot has been pushed ${movie.holdWeeks} week${movie.holdWeeks === 1 ? '' : 's'} while you finish your current film. It recasts after ${MAX_HOLD_WEEKS}.`);
+    }
+  }
   for (const t of transitions) {
+    if (t.to === 'player-ready') continue;
     const movie = ws.movies.get(t.movieId)!;
-    if (t.to === 'filming') {
-      if (hasPlayer(movie, player.id) && !state.activeProduction) {
-        const app = state.applications.find((a) => a.status === 'booked' && a.movieId === movie.id);
-        const role = movie.roles.find((r) => r.castPersonId === player.id);
-        const entry = movie.cast.find((c) => c.personId === player.id);
-        if (app && role && entry) {
-          startProduction(state, movie, app, role, entry.salary);
-          app.status = 'in_production';
-        }
-      }
-    } else if (t.to === 'wrapped') {
+    if (t.to === 'wrapped') {
       finalizeWrap(state, ws, movie, undefined, bus);
     } else if (t.to === 'released') {
       const run = openRun(state.worldSeed, week, movie, ws);
@@ -148,6 +171,18 @@ export function advanceWeek(state: GameState, ws: WorkingSet, opts: TickOptions 
         bus.emit('box_office', `${movie.title} — opening weekend`, `Domestic ${formatMoney(run.openingDomestic)} · International ${formatMoney(run.openingInternational)} · Worldwide ${formatMoney(run.worldwide)}`);
       } else if (movie.budget >= 40_000_000 || run.worldwide >= 30_000_000) {
         bus.emit('industry', `${movie.title} opens to ${formatMoney(run.worldwide)} worldwide`, `${ws.studios.get(movie.studioId)?.name} · ${movie.genres.join('/')} · budget ${formatMoney(movie.budget)}.`);
+      }
+    }
+  }
+
+  // 3b. Recovery: a player film already marked filming with no shoot running (e.g. a save from
+  //     before hold-and-recast existed) starts its shoot now rather than hanging forever.
+  if (!worldOnly && !state.activeProduction) {
+    for (const movie of ws.movies.values()) {
+      if (movie.status !== 'filming' || !hasPlayer(movie, player.id)) continue;
+      if (beginPlayerShoot(movie)) {
+        bus.emit('production', `${movie.title} starts filming`, `The production waited for you — ${movie.productionWeeks} weeks scheduled.`);
+        break;
       }
     }
   }

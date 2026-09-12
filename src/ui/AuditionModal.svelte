@@ -8,8 +8,22 @@
   let { listingId }: { listingId: string } = $props();
 
   const s = $derived(store.state!);
-  const listing = $derived(s.listings.find((l) => l.id === listingId));
   const app = $derived(s.applications.find((a) => a.listingId === listingId));
+  const live = $derived(s.listings.find((l) => l.id === listingId));
+  const movieForApp = $derived(app ? store.movie(app.movieId) : undefined);
+  /** Once a film leaves casting its listing is gone; rebuild the view from the application + role. */
+  const listing = $derived.by(() => {
+    if (live) return live;
+    if (!app || !movieForApp) return undefined;
+    const role = movieForApp.roles.find((r) => r.id === app.roleId);
+    const entry = movieForApp.cast.find((c) => c.personId === s.player.id);
+    return {
+      id: app.listingId, movieId: app.movieId, roleId: app.roleId, characterName: app.characterName, roleType: app.roleType,
+      expectedSalary: entry?.salary ?? role?.salary ?? 0, difficulty: role?.difficulty ?? 0, requiredActing: role?.requiredActing ?? 0,
+      preferredGenre: movieForApp.genres[0], estimatedPrestige: 'Moderate' as const, estimatedCommercial: 'Moderate' as const,
+      competitorIds: (app.competitorScores ?? []).map((c) => c.personId), postedWeek: app.appliedWeek, expiresWeek: app.appliedWeek,
+    };
+  });
   const movie = $derived(listing ? store.movie(listing.movieId) : undefined);
   const director = $derived(movie ? store.director(movie.directorId) : undefined);
   const studio = $derived(movie ? store.studio(movie.studioId) : undefined);
@@ -92,9 +106,23 @@
             <div class="muted tiny" style="margin-top:6px">Offer lapses {formatDate(app.offerExpiresWeek!, s.epochYear)}. Contract negotiation arrives in a later phase.</div>
           </div>
         </section>
+      {:else if app?.status === 'booked' || app?.status === 'in_production'}
+        <section class="panel">
+          <div class="panel-head"><h3>Booked</h3><span class="tag good">{app.status === 'booked' ? 'Awaiting shoot' : 'Filming'}</span></div>
+          <div class="stat-big">Score {app.auditionScore}/100</div>
+          <p class="muted">"{app.directorReaction}"</p>
+          <p style="margin-top:8px">
+            {#if app.status === 'booked'}
+              Shoot begins {formatDate(movie.productionStartWeek, s.epochYear)} ({Math.max(0, movie.productionStartWeek - s.week)} week{movie.productionStartWeek - s.week === 1 ? '' : 's'} away) · {movie.productionWeeks} weeks · {formatMoney(listing.expectedSalary)} on wrap.
+              {#if movie.holdWeeks}<span class="warn"> The production has pushed its start {movie.holdWeeks} week{movie.holdWeeks === 1 ? '' : 's'} waiting for you; it recasts after 6.</span>{/if}
+            {:else}
+              You're on set. See the Production screen for the shoot.
+            {/if}
+          </p>
+        </section>
       {:else if app?.auditionScore !== undefined}
         <section class="panel">
-          <div class="panel-head"><h3>Audition result</h3><span class="tag {app.status === 'booked' || app.status === 'in_production' ? 'good' : 'bad'}">{app.status === 'rejected' ? 'Passed over' : app.status}</span></div>
+          <div class="panel-head"><h3>Audition result</h3><span class="tag bad">{app.status === 'rejected' ? 'Passed over' : app.status}</span></div>
           <div class="stat-big">Score {app.auditionScore}/100</div>
           <p class="muted">"{app.directorReaction}"</p>
         </section>

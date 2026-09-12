@@ -17,7 +17,7 @@ import { advanceWeek } from './TimeEngine';
 import { EventBus } from './EventBus';
 import { ACTION_COSTS, createPlayer, type PlayerSpec } from '../sim/ActorEngine';
 import { seedUniverse } from '../world/IndustryEngine';
-import { acceptOffer, applyBlockedReason, declineOffer, refreshListings, setPrep } from '../industry/AuditionEngine';
+import { acceptOffer, applyBlockedReason, declineOffer, findListing, refreshListings, setPrep } from '../industry/AuditionEngine';
 import { attachPerson } from '../industry/MovieEngine';
 import { SAVE_VERSION, type SaveEngine } from '../meta/SaveEngine';
 
@@ -129,7 +129,7 @@ export class Game {
   planAction(action: PlannedAction): void {
     if (this.actionsRemaining <= 0) throw new Error('No actions left this week.');
     if (action.type === 'apply') {
-      const reason = applyBlockedReason(this.state, action.listingId);
+      const reason = applyBlockedReason(this.state, this.ws, action.listingId);
       if (reason) throw new Error(reason);
     }
     if (action.type === 'rest' && this.state.weekPlan.some((a) => a.type === 'rest')) {
@@ -156,17 +156,14 @@ export class Game {
   }
 
   acceptOffer(listingId: Id): void {
-    const { listing } = acceptOffer(this.state, listingId);
-    const movie = this.ws.movies.get(listing.movieId);
-    const role = movie?.roles.find((r) => r.id === listing.roleId);
-    if (!movie || !role) throw new Error('That role no longer exists.');
+    const listing = findListing(this.state, listingId);
+    const movie = listing ? this.ws.movies.get(listing.movieId) : undefined;
+    const role = movie?.roles.find((r) => r.id === listing!.roleId);
+    if (!listing || !movie || !role) throw new Error('That role no longer exists.');
     if (role.castPersonId) throw new Error('The role has already been cast.');
+    acceptOffer(this.state, this.ws, listingId);
     attachPerson(this.ws, movie, this.state.player, role, listing.expectedSalary);
     this.state.trackedMovieIds.push(movie.id);
-    // Other live offers can't be honoured alongside a booking this phase.
-    for (const app of this.state.applications) {
-      if (app.status === 'offer' && app.listingId !== listingId) app.status = 'declined';
-    }
     this.state.weeklyReport.push({
       week: this.state.week, category: 'casting', title: `Booked: ${listing.characterName}`,
       description: `You accepted the ${listing.roleType} role in ${movie.title}. Filming starts in ${Math.max(0, movie.productionStartWeek - this.state.week)} weeks.`,

@@ -178,13 +178,43 @@ export function findApplication(state: GameState, listingId: Id): Application | 
 }
 
 /** Can the player apply right now? Returns a reason string when not. */
-export function applyBlockedReason(state: GameState, listingId: Id): string | null {
+export function applyBlockedReason(state: GameState, ws: Pick<WorkingSet, 'movies'>, listingId: Id): string | null {
   const listing = findListing(state, listingId);
   if (!listing) return 'Listing is no longer open.';
   if (findApplication(state, listingId)) return 'Already applied.';
   if (state.weekPlan.some((a) => a.type === 'apply' && a.listingId === listingId)) return 'Application already planned this week.';
-  if (state.activeProduction) return 'You are on set — finish filming first.';
-  if (state.applications.some((a) => a.status === 'booked')) return 'You already have a booked role waiting to shoot.';
+  const movie = ws.movies.get(listing.movieId);
+  const conflict = movie ? shootConflict(state, ws, movie) : null;
+  if (conflict) return conflict;
+  return null;
+}
+
+/** Shoot windows the player is already committed to: the active production and any booked film. */
+export function playerCommitments(state: GameState, ws: Pick<WorkingSet, 'movies'>): { title: string; start: number; end: number }[] {
+  const out: { title: string; start: number; end: number }[] = [];
+  if (state.activeProduction) {
+    const m = ws.movies.get(state.activeProduction.movieId);
+    const remaining = state.activeProduction.totalWeeks - state.activeProduction.currentWeek;
+    out.push({ title: m?.title ?? 'your current film', start: state.week, end: state.week + remaining });
+  }
+  for (const app of state.applications) {
+    if (app.status !== 'booked') continue;
+    const m = ws.movies.get(app.movieId);
+    if (m) out.push({ title: m.title, start: m.productionStartWeek, end: m.productionStartWeek + m.productionWeeks });
+  }
+  return out;
+}
+
+/** Would this film's shoot overlap something the player is already committed to? Returns the reason if so. */
+export function shootConflict(state: GameState, ws: Pick<WorkingSet, 'movies'>, movie: Movie): string | null {
+  const start = movie.productionStartWeek;
+  const end = start + movie.productionWeeks;
+  for (const c of playerCommitments(state, ws)) {
+    // A one-week buffer: back-to-back is fine, overlapping is not.
+    if (start <= c.end + 1 && end + 1 >= c.start) {
+      return `The shoot overlaps ${c.title} (you're on that set until about week ${c.end - state.week} from now).`;
+    }
+  }
   return null;
 }
 
@@ -285,10 +315,13 @@ function directorReaction(
 // Offers
 // ---------------------------------------------------------------------------
 
-export function acceptOffer(state: GameState, listingId: Id): { app: Application; listing: AuditionListing } {
+export function acceptOffer(state: GameState, ws: WorkingSet, listingId: Id): { app: Application; listing: AuditionListing } {
   const app = findApplication(state, listingId);
   const listing = findListing(state, listingId);
   if (!app || !listing || app.status !== 'offer') throw new Error('No live offer for that listing.');
+  const movie = ws.movies.get(listing.movieId);
+  const conflict = movie ? shootConflict(state, ws, movie) : null;
+  if (conflict) throw new Error(`Can't take this one: ${conflict} Decline it, or let the offer lapse.`);
   app.status = 'booked';
   return { app, listing };
 }

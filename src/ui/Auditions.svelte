@@ -26,7 +26,7 @@
           {@const m = store.movie(l.movieId)}
           {@const d = m ? store.director(m.directorId) : undefined}
           {@const app = s.applications.find((a) => a.listingId === l.id)}
-          {@const blocked = applyBlockedReason(s, l.id)}
+          {@const blocked = store.world ? applyBlockedReason(s, store.world, l.id) : 'Loading'}
           <tr>
             <td><strong>{m?.title}</strong><div class="muted tiny">{m ? store.studio(m.studioId)?.name : ''} · {m?.budgetTier}</div></td>
             <td>{m?.genres.join(' / ')}</td>

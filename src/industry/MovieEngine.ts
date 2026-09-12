@@ -57,24 +57,31 @@ export function hasPlayer(movie: Movie, playerId: Id): boolean {
 
 export interface MovieTransition {
   movieId: Id;
-  to: 'filming' | 'wrapped' | 'released';
+  /** `player-ready`: a player film has reached its start week; the orchestrator starts, holds or recasts it. */
+  to: 'filming' | 'wrapped' | 'released' | 'player-ready';
 }
+
+/** How long a production will push its start to wait for the player before recasting. */
+export const MAX_HOLD_WEEKS = 6;
 
 /**
  * Advance every movie by the calendar. Player-attached shoots are driven by ProductionEngine
- * (their wrap comes from there); NPC-only shoots wrap on schedule.
+ * (their wrap comes from there); NPC-only shoots wrap on schedule. A player film that reaches
+ * its start week is reported as `player-ready` — the orchestrator starts it, or holds it while
+ * the player is on another set (up to MAX_HOLD_WEEKS) and then recasts.
  */
 export function tickMovies(state: GameState, ws: WorkingSet, bus: EventBus): MovieTransition[] {
   const out: MovieTransition[] = [];
   const week = state.week;
   const playerId = state.player.id;
   for (const movie of ws.movies.values()) {
+    if (movie.status === 'pre-production' && movie.productionStartWeek <= week && hasPlayer(movie, playerId)) {
+      out.push({ movieId: movie.id, to: 'player-ready' });
+      continue;
+    }
     if (movie.status === 'pre-production' && movie.productionStartWeek <= week) {
       movie.status = 'filming';
       markDirty(ws, 'movies', movie.id);
-      if (hasPlayer(movie, playerId)) {
-        bus.emit('production', `${movie.title} starts filming`, `Principal photography begins — ${movie.productionWeeks} weeks scheduled.`);
-      }
       out.push({ movieId: movie.id, to: 'filming' });
     } else if (movie.status === 'filming' && !hasPlayer(movie, playerId) && movie.productionStartWeek + movie.productionWeeks <= week) {
       out.push({ movieId: movie.id, to: 'wrapped' });

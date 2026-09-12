@@ -15,7 +15,7 @@ function playUntilResult(seed: string, maxWeeks = 400): { result: MovieResult; w
     const s = game.state;
     for (const app of s.applications) {
       if (app.status === 'audition_pending' && !app.prep) game.choosePrep(app.listingId, 'Practice Scene');
-      if (app.status === 'offer') game.acceptOffer(app.listingId);
+      if (app.status === 'offer') { try { game.acceptOffer(app.listingId); } catch { game.declineOffer(app.listingId); } }
     }
     for (const l of s.listings) {
       if (game.actionsRemaining === 0) break;

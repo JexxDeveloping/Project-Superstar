@@ -199,6 +199,8 @@ export interface Movie {
   castingCloseWeek: number;
   productionStartWeek: number;
   productionWeeks: number;
+  /** Weeks the shoot has waited for a cast member (the player) who was on another set. */
+  holdWeeks?: number;
   /** Set when production wraps. */
   wrapWeek?: number;
   releaseWeek?: number;
