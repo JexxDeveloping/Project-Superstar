@@ -88,5 +88,6 @@ Where later parts differ from earlier ones, the later part governs.
   10. **Tracking reports** the week before release ("tracking suggests $18–26M"), accuracy scaling with connections/agent.
   11. Result screen explains the run week by week (opened #2 behind X; held on strong WOM; crushed by Y in week 3).
   12. Balance pass: re-derive the verdict distribution through competition (target roughly Disaster 10 / Flop 30 / Average 30 / Hit 15 / Super Hit 8 / Blockbuster 5 / All-Time 2) and re-tune Commercial impacts so a break-even indie still advances a rookie via fame.
+  13. **Entity-history decisions** (Part 3 → Entity Profile Pages, accepted 2026-09-12): per-film backend on the player's credit; cumulative box office + average review stored per person; a per-film credit shape for directors. *(Already done ahead of Phase 4: cancelled productions leave a "cancelled" credit on every attached person; studios keep a per-film log — film, result, relationship change — with no studio UI until Phase 7.)*
   Deferred: franchises/sequels (Phase 5/6), awards-season timing (Phase 6).
 - Update this section as each Part 4 phase completes so future sessions resume correctly.

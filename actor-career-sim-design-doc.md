@@ -1914,6 +1914,19 @@ person stores their per-film record, cumulative gross, career earnings, and
 running average review. If this history is persisted to each entity's Dexie
 record as it happens, these pages are pure read-only views built in Phase 7.
 
+Accepted decisions (2026-09-12) on what the records must hold:
+1. A cancelled/collapsed production leaves a persistent credit (status
+   "cancelled/unreleased") on every attached person — storytelling for future
+   profiles. *(Implemented immediately, since the data is otherwise lost every turn.)*
+2. Per-film backend earnings are recorded on the player's filmography credit, not
+   only in the running total. *(Phase 4.)*
+3. Cumulative box office and average review are stored per person, not computed
+   at view time. *(Phase 4.)*
+4. Directors get a real per-film credit shape (film, role, salary) like actors, so
+   director profiles can show a filmography. *(Phase 4.)*
+5. Studios log per-film data (film, result, relationship change) so studio profiles
+   are possible later. *(Logging implemented immediately; studio UI is Phase 7.)*
+
 ---
 ---
 
@@ -1925,7 +1938,7 @@ The 14-step content order in Part 1 remains the reference. This is the practical
 2. Procedural movie/NPC generation + the living-world weekly tick.
 3. Full casting/audition probability + contracts + negotiation.
 4. Box office engine (the hard math) + release calendar competition.
-   *Phase 4 notes:* store running cumulative box office + average review on each person record instead of computing on the fly. Add movie metadata fields: Type (animation/live-action), Plot Arc, Rating, Runtime, Plot summary — required by the Movie Profile page.
+   *Phase 4 notes:* store running cumulative box office + average review on each person record instead of computing on the fly. Add movie metadata fields: Type (animation/live-action), Plot Arc, Rating, Runtime, Plot summary — required by the Movie Profile page. Also from the Entity Profile Pages decisions (Part 3): per-film backend on the player's credit; a per-film credit shape for directors. (Cancelled-production credits and the studio per-film log were implemented ahead of Phase 4.)
 5. Perception, typecasting, rivalries, relationships, news.
 6. Awards, finances, milestones, scandals.
    *Note for phases 2–6:* Persist per-entity history as it is generated (each movie's weekly box office, each person's per-film result, cumulative gross, avg review) to the entity's Dexie record — do not compute-and-discard. Required by the Entity Profile Pages in Part 3.
