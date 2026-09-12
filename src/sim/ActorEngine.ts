@@ -140,6 +140,8 @@ export function createPlayer(universeId: Id, worldSeed: number, startWeek: numbe
     lastWorkedWeek: startWeek,
     peakStarPower: attrs.starPower,
     activeMovieIds: [],
+    backendEarnings: 0,
+    headToHead: [],
   };
 }
 
@@ -175,6 +177,7 @@ export const ACTION_COSTS = {
   prepare_role: { cash: 0, energy: 15, stress: 2 },
   rest: { cash: 0, energy: -30, stress: -18 },
   apply: { cash: 0, energy: 4, stress: 2 },
+  read_script: { cash: 0, energy: 5, stress: 0 },
 } as const;
 
 export const PREP_ROLE_BONUS = 3;
@@ -239,6 +242,11 @@ export function resolvePlayerWeek(state: GameState, bus: EventBus): void {
             addXp(p, 3);
           }
         }
+        break;
+      }
+      case 'read_script': {
+        // Owned by AuditionEngine; the energy cost lands here so every action has a cost.
+        p.energy = clamp(p.energy - ACTION_COSTS.read_script.energy, 0, 100);
         break;
       }
       case 'apply': {

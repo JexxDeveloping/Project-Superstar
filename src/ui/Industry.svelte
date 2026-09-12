@@ -65,7 +65,7 @@
     if (!v) return '';
     return ['Hit', 'Super Hit', 'Blockbuster', 'All-Time Blockbuster'].includes(v) ? 'good' : v === 'Average' ? '' : 'bad';
   }
-  const STATUS_LABEL: Record<Movie['status'], string> = { casting: 'Casting', 'pre-production': 'Pre-production', filming: 'Filming', 'post-production': 'Post', released: 'In theaters', completed: 'Done' };
+  const STATUS_LABEL: Record<Movie['status'], string> = { casting: 'Casting', 'pre-production': 'Pre-production', filming: 'Filming', 'post-production': 'Post', released: 'In theaters', completed: 'Done', cancelled: 'Cancelled' };
 </script>
 
 <div class="stack">

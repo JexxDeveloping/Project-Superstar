@@ -20,7 +20,7 @@ function bookPlayerOn(game: Game, exclude: string[] = []): Movie {
   s.trackedMovieIds.push(movie.id);
   s.applications.push({
     listingId: `l-${role.id}`, movieId: movie.id, roleId: role.id, movieTitle: movie.title, characterName: role.characterName,
-    roleType: role.roleType, appliedWeek: s.week, status: 'booked', auditionScore: 60, directorReaction: 'Fine.', prepBonus: 1,
+    roleType: role.roleType, appliedWeek: s.week, status: 'booked', source: 'audition', auditionScore: 60, directorReaction: 'Fine.', prepBonus: 1,
   });
   return movie;
 }
@@ -99,7 +99,7 @@ describe('Double booking', () => {
     for (const m of [overlap, clear]) {
       const l = listingFor(m);
       s.listings.push(l);
-      s.applications.push({ listingId: l.id, movieId: m.id, roleId: l.roleId, movieTitle: m.title, characterName: l.characterName, roleType: l.roleType, appliedWeek: s.week, status: 'offer', auditionScore: 70 });
+      s.applications.push({ listingId: l.id, movieId: m.id, roleId: l.roleId, movieTitle: m.title, characterName: l.characterName, roleType: l.roleType, appliedWeek: s.week, status: 'offer', source: 'audition', auditionScore: 70 });
     }
     expect(() => game.acceptOffer(`l-${overlap.roles.find((r) => !r.castPersonId)!.id}`)).toThrow(/overlaps/);
     expect(() => game.acceptOffer(listingFor(clear).id)).not.toThrow();

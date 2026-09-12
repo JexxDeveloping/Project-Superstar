@@ -13,6 +13,7 @@ import {
 import { rngFor } from '../core/RNG';
 import type { EventBus } from '../core/EventBus';
 import { addXp } from '../sim/ActorEngine';
+import { agentFor, commissionOn } from '../world/AgentEngine';
 
 interface EventTemplate {
   title: string;
@@ -124,10 +125,12 @@ export function tickProduction(state: GameState, ws: WorkingSet, bus: EventBus):
   }
 
   if (prod.currentWeek >= prod.totalWeeks) {
-    p.cash += prod.salary;
+    const agent = agentFor(state);
+    const commission = commissionOn(agent, prod.salary);
+    p.cash += prod.salary - commission;
     p.careerEarnings += prod.salary;
     const xp = addXp(p, 60);
-    bus.emit('production', `${movie.title} wraps`, `That's a wrap after ${prod.totalWeeks} weeks. Paid $${prod.salary.toLocaleString()}.${xp.leveledUp ? ` Reached level ${xp.level}!` : ''}`);
+    bus.emit('production', `${movie.title} wraps`, `That's a wrap after ${prod.totalWeeks} weeks. Paid $${prod.salary.toLocaleString()}${commission ? ` ($${commission.toLocaleString()} to ${agent!.agency})` : ''}.${xp.leveledUp ? ` Reached level ${xp.level}!` : ''}`);
     const director = ws.directors.get(movie.directorId);
     if (director) {
       director.playerRelationship = clamp(director.playerRelationship + 2, 0, 100);

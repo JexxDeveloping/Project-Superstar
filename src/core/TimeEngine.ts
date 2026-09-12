@@ -14,9 +14,12 @@ import { EventBus } from './EventBus';
 import { ageInYears, resolvePlayerWeek, starTier, WEEKS_PER_YEAR } from '../sim/ActorEngine';
 import { npcWeeklyDrift } from '../sim/NPCEngine';
 import { tickCareers } from '../sim/CareerEngine';
-import { OFFER_WINDOW_WEEKS, findListing, performAudition, refreshListings, resolveApplications } from '../industry/AuditionEngine';
-import { closeCasting, decideCallback, replacePlayer, resolveCasting } from '../industry/CastingEngine';
-import { MAX_HOLD_WEEKS, completeMovie, hasPlayer, roleInfluence, tickMovies, wrapMovie } from '../industry/MovieEngine';
+import { OFFER_WINDOW_WEEKS, estimateBand, findListing, performAudition, refreshListings, resolveApplications, resolveScriptReads } from '../industry/AuditionEngine';
+import { bestAlternativeFit, closeCasting, decideCallback, findDirectOffer, playerFit, replacePlayer, resolveCasting, shortlistFor } from '../industry/CastingEngine';
+import { MAX_HOLD_WEEKS, completeMovie, hasPlayer, roleInfluence, tickCancellations, tickMovies, wrapMovie } from '../industry/MovieEngine';
+import { computePayout, generateOffer } from '../industry/ContractEngine';
+import { agentFor, tickAgentApproaches } from '../world/AgentEngine';
+import { rngFor } from './RNG';
 import { startProduction, tickProduction } from '../industry/ProductionEngine';
 import {
   applyPerformanceImpacts, evaluatePerformance, npcPerformanceContext, performanceImpacts, type PerformanceContext,
@@ -81,7 +84,10 @@ export function advanceWeek(state: GameState, ws: WorkingSet, opts: TickOptions 
       bus.emit('time', `Happy birthday — ${ageInYears(player, week)}`, 'Another year in the business.');
     }
     resolvePlayerWeek(state, bus);
+    resolveScriptReads(state, ws, bus);
     resolveApplications(state, ws, bus);
+    const agent = agentFor(state);
+    const careerGross = player.filmography.reduce((sum, f) => sum + (ws.movies.get(f.movieId)?.boxOffice?.worldwide ?? 0), 0);
     for (const app of state.applications) {
       if (app.status !== 'audition_pending' || app.auditionWeek !== week) continue;
       const listing = findListing(state, app.listingId);
@@ -89,11 +95,21 @@ export function advanceWeek(state: GameState, ws: WorkingSet, opts: TickOptions 
       const outcome = performAudition(state, ws, app, listing, bus);
       const decision = resolveCasting(state.worldSeed, week, player, outcome.score, listing, ws);
       app.competitorScores = decision.competitorScores;
-      if (decision.won) {
+      // Head-to-head: every named competitor you were scored against, and who read better.
+      for (const c of decision.competitorScores) {
+        player.headToHead.push({ personId: c.personId, week, movieId: listing.movieId, roleType: listing.roleType, won: decision.playerEffective > c.score });
+      }
+      const movie = ws.movies.get(listing.movieId);
+      const role = movie?.roles.find((r) => r.id === listing.roleId);
+      if (decision.won && movie && role) {
         app.status = 'offer';
         app.offerExpiresWeek = week + OFFER_WINDOW_WEEKS;
         app.prepBonus = outcome.carry;
-        bus.emit('casting', `Offer: ${listing.characterName}`, `${decision.reason} $${listing.expectedSalary.toLocaleString()} for ${listing.roleType}. Answer within ${OFFER_WINDOW_WEEKS} weeks.`);
+        app.contract = generateOffer(state, ws, movie, role, {
+          direct: false, agent, careerGross,
+          playerFit: playerFit(state, movie, role), bestAlternativeFit: bestAlternativeFit(state.worldSeed, movie, role, ws, week),
+        });
+        bus.emit('casting', `Offer: ${listing.characterName}`, `${decision.reason} ${ws.studios.get(movie.studioId)?.name} opens at $${app.contract.terms.baseSalary.toLocaleString()} for ${listing.roleType}. Negotiate or sign within ${OFFER_WINDOW_WEEKS} weeks.`);
       } else {
         app.status = 'rejected';
         bus.emit('casting', `Passed over: ${listing.characterName}`, decision.reason);
@@ -103,7 +119,7 @@ export function advanceWeek(state: GameState, ws: WorkingSet, opts: TickOptions 
       if (app.status !== 'applied') continue;
       const listing = findListing(state, app.listingId);
       if (!listing) { app.status = 'expired'; continue; }
-      const { callback } = decideCallback(state.worldSeed, week, player, listing, ws);
+      const { callback } = decideCallback(state, listing, ws);
       if (callback) {
         app.status = 'audition_pending';
         app.auditionWeek = week + 1;
@@ -111,6 +127,75 @@ export function advanceWeek(state: GameState, ws: WorkingSet, opts: TickOptions 
       } else {
         app.status = 'no_callback';
         bus.emit('audition', `No callback: ${listing.characterName}`, 'Casting went another way before you were seen.');
+      }
+    }
+
+    // Direct offers: a studio sends a role straight to a name.
+    if (!state.activeProduction) {
+      const direct = findDirectOffer(state, ws);
+      if (direct) {
+        const { movie, role } = direct;
+        const director = ws.directors.get(movie.directorId)!;
+        const rng = rngFor(state.worldSeed, movie.id, week, `direct-listing:${role.id}`);
+        const listingId = `l-${role.id}`;
+        if (!state.listings.some((l) => l.id === listingId)) {
+          state.listings.push({
+            id: listingId, movieId: movie.id, roleId: role.id, characterName: role.characterName, roleType: role.roleType,
+            expectedSalary: role.salary, difficulty: role.difficulty, requiredActing: role.requiredActing, preferredGenre: movie.genres[0],
+            estimatedPrestige: estimateBand(movie.hidden.scriptQuality * 0.7 + director.prestige * 0.3, rng),
+            estimatedCommercial: estimateBand(movie.hidden.commercialPotential, rng),
+            competitorIds: shortlistFor(state.worldSeed, movie, role, ws, week).map((x) => x.id),
+            postedWeek: week, expiresWeek: movie.castingCloseWeek,
+          });
+        }
+        const contract = generateOffer(state, ws, movie, role, {
+          direct: true, agent, careerGross,
+          playerFit: playerFit(state, movie, role), bestAlternativeFit: bestAlternativeFit(state.worldSeed, movie, role, ws, week),
+        });
+        state.applications.push({
+          listingId, movieId: movie.id, roleId: role.id, movieTitle: movie.title, characterName: role.characterName, roleType: role.roleType,
+          appliedWeek: week, status: 'offer', source: 'direct', contract, offerExpiresWeek: week + OFFER_WINDOW_WEEKS, prepBonus: 1,
+        });
+        bus.emit('casting', `Direct offer: ${role.characterName} in ${movie.title}`, `${ws.studios.get(movie.studioId)?.name} wants you for the ${role.roleType} — no audition. Opening at $${contract.terms.baseSalary.toLocaleString()}.`);
+      }
+    }
+
+    // Withdrawn deals close their applications.
+    for (const app of state.applications) {
+      if (app.status === 'offer' && app.contract?.status === 'withdrawn') app.status = 'expired';
+    }
+
+    tickAgentApproaches(state, bus);
+  }
+
+  // 1b. Productions that fall apart. The player's booking is handled here (pay-or-play has teeth).
+  //     Sweeps every cancelled film the player is still attached to, not just this week's, so a
+  //     booking can never outlive its film.
+  tickCancellations(state, ws, bus);
+  const LIVE = new Set(['booked', 'offer', 'applied', 'audition_pending']);
+  const deadWithPlayer = new Set<string>();
+  for (const a of state.applications) if (LIVE.has(a.status) && ws.movies.get(a.movieId)?.status === 'cancelled') deadWithPlayer.add(a.movieId);
+  for (const id of [...state.trackedMovieIds, ...player.activeMovieIds]) if (ws.movies.get(id)?.status === 'cancelled') deadWithPlayer.add(id);
+  for (const l of state.listings) if (ws.movies.get(l.movieId)?.status === 'cancelled') deadWithPlayer.add(l.movieId);
+  for (const movieId of deadWithPlayer) {
+    const movie = ws.movies.get(movieId)!;
+    state.listings = state.listings.filter((l) => l.movieId !== movie.id);
+    state.trackedMovieIds = state.trackedMovieIds.filter((id) => id !== movie.id);
+    player.activeMovieIds = player.activeMovieIds.filter((id) => id !== movie.id);
+    // Every live application on the film (the player can be up for more than one part).
+    for (const app of state.applications) {
+      if (app.movieId !== movie.id || !LIVE.has(app.status)) continue;
+      const wasBooked = app.status === 'booked';
+      app.status = 'expired';
+      if (wasBooked && app.contract?.terms.payOrPlay) {
+        const pay = app.contract.terms.baseSalary;
+        player.cash += pay;
+        player.careerEarnings += pay;
+        bus.emit('contract', `${movie.title} collapses — and you get paid anyway`, `Pay-or-play: $${pay.toLocaleString()} for a film that will never shoot (${movie.cancelledReason}).`);
+      } else if (wasBooked) {
+        bus.emit('casting', `${movie.title} collapses`, `The production is dead: ${movie.cancelledReason}. No shoot, no paycheck.`);
+      } else {
+        bus.emit('audition', `${movie.title} collapses`, `The role you were up for no longer exists: ${movie.cancelledReason}.`);
       }
     }
   }
@@ -289,6 +374,18 @@ function resolveRun(state: GameState, ws: WorkingSet, movie: Movie, bus: EventBu
     markDirty(ws, 'people', person.id);
 
     if (person.isPlayer) {
+      if (c.contract) {
+        const payout = computePayout(c.contract, run, movie, agentFor(state));
+        if (payout.bonus + payout.gross + payout.net > 0) {
+          person.cash += payout.total;
+          person.careerEarnings += payout.bonus + payout.gross + payout.net;
+          person.backendEarnings += payout.total;
+          fromCommercial.push({ target: 'cash', label: 'Backend paid', amount: payout.total });
+          bus.emit('contract', `${movie.title} backend: $${payout.total.toLocaleString()}`, `${payout.bonus ? `bonus $${payout.bonus.toLocaleString()} · ` : ''}${payout.gross ? `gross points $${payout.gross.toLocaleString()} · ` : ''}${payout.net ? `net points $${payout.net.toLocaleString()} · ` : ''}${payout.commission ? `commission $${payout.commission.toLocaleString()}` : 'no commission'}`);
+        } else if (c.contract.netPoints > 0) {
+          bus.emit('contract', `${movie.title} backend: $0`, `Your ${c.contract.netPoints} net points paid nothing — the studio's accountants found no "net profit". Welcome to Hollywood.`);
+        }
+      }
       state.pendingResults.push(buildResult(state, movie, c.characterName, c.roleType, c.performance, quality, { fromPerformance, fromQuality, fromCommercial }));
       state.trackedMovieIds = state.trackedMovieIds.filter((id) => id !== movie.id);
       bus.emit('result', `${movie.title} — ${run.verdict}`, state.pendingResults[state.pendingResults.length - 1].headline);

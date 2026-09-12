@@ -10,11 +10,14 @@
   import Career from './Career.svelte';
   import Timeline from './Timeline.svelte';
   import Industry from './Industry.svelte';
+  import Scripts from './Scripts.svelte';
+  import ContractModal from './ContractModal.svelte';
   import ResultScreen from './ResultScreen.svelte';
 
   const NAV: { id: Screen; label: string }[] = [
     { id: 'home', label: 'Home' },
     { id: 'auditions', label: 'Auditions' },
+    { id: 'scripts', label: 'Scripts' },
     { id: 'production', label: 'Production' },
     { id: 'career', label: 'Career' },
     { id: 'industry', label: 'Industry' },
@@ -49,6 +52,7 @@
       <main class="main">
         {#if store.screen === 'home'}<Home />
         {:else if store.screen === 'auditions'}<Auditions />
+        {:else if store.screen === 'scripts'}<Scripts />
         {:else if store.screen === 'production'}<Production />
         {:else if store.screen === 'career'}<Career />
         {:else if store.screen === 'industry'}<Industry />
@@ -59,6 +63,8 @@
 
   {#if store.state.pendingResults.length > 0}
     <ResultScreen result={store.state.pendingResults[0]} />
+  {:else if store.openContractListingId}
+    <ContractModal listingId={store.openContractListingId} />
   {:else if store.openListingId}
     <AuditionModal listingId={store.openListingId} />
   {/if}

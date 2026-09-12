@@ -8,7 +8,7 @@
 import { Game, type NewGameOptions } from '../core/Game';
 import { SaveEngine, type SaveSlotMeta } from '../meta/SaveEngine';
 import type {
-  Director, GameState, Id, Movie, Person, PlannedAction, PrepChoice, Studio,
+  Agent, CounterMove, Director, GameState, Id, Movie, NegotiationEvent, Person, PlannedAction, PrepChoice, Studio,
 } from '../core/GameState';
 
 export interface WorldView {
@@ -18,7 +18,7 @@ export interface WorldView {
   people: Map<Id, Person>;
 }
 
-export type Screen = 'home' | 'auditions' | 'production' | 'career' | 'industry' | 'timeline';
+export type Screen = 'home' | 'auditions' | 'scripts' | 'production' | 'career' | 'industry' | 'timeline';
 
 const SKIP_MAX_WEEKS = 26;
 
@@ -32,6 +32,10 @@ class GameStore {
   saves = $state<SaveSlotMeta[]>([]);
   /** Listing currently open in the audition modal. */
   openListingId = $state<Id | null>(null);
+  /** Offer currently open in the contract modal. */
+  openContractListingId = $state<Id | null>(null);
+  /** The studio's reply to the last counter, for the modal to show. */
+  lastNegotiation = $state<NegotiationEvent | null>(null);
 
   private game: Game | null = null;
   private readonly save = new SaveEngine();
@@ -114,6 +118,17 @@ class GameStore {
   acceptOffer(listingId: Id): void { this.command(() => this.game!.acceptOffer(listingId)); }
   declineOffer(listingId: Id): void { this.command(() => this.game!.declineOffer(listingId)); }
   dismissResult(): void { this.command(() => this.game!.dismissResult()); }
+  counterOffer(listingId: Id, move: CounterMove): void {
+    this.command(() => { this.lastNegotiation = this.game!.counterOffer(listingId, move); });
+  }
+  hireAgent(agentId: Id): void { this.command(() => this.game!.hireAgent(agentId)); }
+  fireAgent(): void { this.command(() => this.game!.fireAgent()); }
+  declineApproach(agentId: Id): void { this.command(() => this.game!.declineApproach(agentId)); }
+
+  agent(): Agent | undefined {
+    const s = this.state;
+    return s?.player.agentId ? s.agents.find((a) => a.id === s.player.agentId) : undefined;
+  }
 
   // --- lookups (snapshot) ----------------------------------------------------
 
@@ -179,6 +194,7 @@ class GameStore {
 function needsPlayer(s: GameState): boolean {
   if (s.pendingResults.length > 0) return true;
   if (s.applications.some((a) => a.status === 'offer' || (a.status === 'audition_pending' && !a.prep))) return true;
+  if (s.agentApproaches.length > 0 && s.weeklyReport.some((e) => e.category === 'agent')) return true;
   return s.weeklyReport.some((e) =>
     e.category === 'result' || e.category === 'casting' || e.category === 'release' ||
     e.title.startsWith('Callback') || e.title.includes('starts filming') || e.title.includes('wraps') || e.title.includes('opening weekend'));

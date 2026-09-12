@@ -17,7 +17,10 @@ import { advanceWeek } from './TimeEngine';
 import { EventBus } from './EventBus';
 import { ACTION_COSTS, createPlayer, type PlayerSpec } from '../sim/ActorEngine';
 import { seedUniverse, studioFromTemplate } from '../world/IndustryEngine';
-import { acceptOffer, applyBlockedReason, declineOffer, findListing, refreshListings, setPrep } from '../industry/AuditionEngine';
+import { acceptOffer, applyBlockedReason, declineOffer, findApplication, findListing, readScriptBlockedReason, refreshListings, setPrep } from '../industry/AuditionEngine';
+import { counterOffer } from '../industry/ContractEngine';
+import { fireAgent, generateAgents, hireAgent } from '../world/AgentEngine';
+import type { CounterMove, NegotiationEvent } from './GameState';
 import { attachPerson } from '../industry/MovieEngine';
 import { SAVE_VERSION, type SaveEngine } from '../meta/SaveEngine';
 import { generateActor, takenNames } from '../sim/NPCEngine';
@@ -145,6 +148,8 @@ export class Game {
       timeline: [],
       weeklyExpenses: WEEKLY_EXPENSES,
       genCounter: seed.genCounter,
+      agents: generateAgents(universeId, worldSeed),
+      agentApproaches: [],
     };
 
     // The world existed before you: studios slate, films shoot and open, careers move.
@@ -194,6 +199,10 @@ export class Game {
       const reason = applyBlockedReason(this.state, this.ws, action.listingId);
       if (reason) throw new Error(reason);
     }
+    if (action.type === 'read_script') {
+      const reason = readScriptBlockedReason(this.state, action.listingId);
+      if (reason) throw new Error(reason);
+    }
     if (action.type === 'rest' && this.state.weekPlan.some((a) => a.type === 'rest')) {
       throw new Error('Resting twice in a week does nothing extra.');
     }
@@ -223,8 +232,19 @@ export class Game {
     const role = movie?.roles.find((r) => r.id === listing!.roleId);
     if (!listing || !movie || !role) throw new Error('That role no longer exists.');
     if (role.castPersonId) throw new Error('The role has already been cast.');
+    const app = findApplication(this.state, listingId)!;
     acceptOffer(this.state, this.ws, listingId);
-    attachPerson(this.ws, movie, this.state.player, role, listing.expectedSalary);
+    const terms = app.contract?.terms;
+    attachPerson(this.ws, movie, this.state.player, role, terms?.baseSalary ?? listing.expectedSalary);
+    const entry = movie.cast.find((c) => c.personId === this.state.player.id);
+    if (entry && terms) {
+      entry.contract = structuredClone(terms);
+      // Negotiated billing is honoured (top billing bumps the player above the existing lead).
+      if (terms.billing < entry.billing) {
+        entry.billing = terms.billing - 0.5;
+        movie.cast.slice().sort((a, b) => a.billing - b.billing).forEach((c, i) => { c.billing = i + 1; });
+      }
+    }
     this.state.trackedMovieIds.push(movie.id);
     this.state.weeklyReport.push({
       week: this.state.week, category: 'casting', title: `Booked: ${listing.characterName}`,
@@ -234,6 +254,34 @@ export class Game {
 
   declineOffer(listingId: Id): void {
     declineOffer(this.state, listingId);
+  }
+
+  /** Push on one term of a live offer. The studio replies immediately; it may walk. */
+  counterOffer(listingId: Id, move: CounterMove): NegotiationEvent {
+    const app = findApplication(this.state, listingId);
+    if (!app || app.status !== 'offer' || !app.contract) throw new Error('No live offer to negotiate.');
+    const movie = this.ws.movies.get(app.movieId);
+    const role = movie?.roles.find((r) => r.id === app.roleId);
+    if (!movie || !role) throw new Error('That role no longer exists.');
+    const ev = counterOffer(this.state, this.ws, movie, role, app.contract, move);
+    if (app.contract.status === 'withdrawn') {
+      app.status = 'expired';
+      this.state.weeklyReport.push({ week: this.state.week, category: 'contract', title: `Offer withdrawn: ${app.characterName}`, description: ev.text });
+    }
+    return ev;
+  }
+
+  hireAgent(agentId: Id): void {
+    const agent = hireAgent(this.state, agentId);
+    this.state.weeklyReport.push({ week: this.state.week, category: 'agent', title: `Signed with ${agent.agency}`, description: `${agent.firstName} ${agent.lastName} now represents you at ${Math.round(agent.commission * 100)}% commission.` });
+  }
+
+  fireAgent(): void {
+    fireAgent(this.state);
+  }
+
+  declineApproach(agentId: Id): void {
+    this.state.agentApproaches = this.state.agentApproaches.filter((id) => id !== agentId);
   }
 
   dismissResult(): void {

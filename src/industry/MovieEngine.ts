@@ -7,6 +7,7 @@ import {
   type GameState, type Id, type Movie, type Person, type Role, type RoleType, type WorkingSet, markDirty,
 } from '../core/GameState';
 import type { EventBus } from '../core/EventBus';
+import { rngFor } from '../core/RNG';
 
 /** How much of a movie's fate a role can carry (Part 1: Career Box Office Impact). */
 export const ROLE_INFLUENCE: Record<RoleType, number> = {
@@ -139,4 +140,46 @@ export function completeMovie(ws: WorkingSet, movieId: Id): void {
   if (!movie) return;
   movie.status = 'completed';
   markDirty(ws, 'movies', movieId);
+}
+
+/** Weekly chance a film falls apart before cameras roll, by tier (financing is shakiest at the bottom). */
+const CANCEL_CHANCE: Record<Movie['budgetTier'], number> = {
+  'Micro Indie': 0.005, 'Indie': 0.004, 'Small Studio': 0.003, 'Medium': 0.0025, 'Large': 0.002, 'Tentpole': 0.0015,
+};
+const CANCEL_REASONS = [
+  'financing fell through', 'the director walked', 'the studio shelved the project', 'a rights dispute stalled it',
+  'the lead dropped out and the money went with them', 'a scheduling collapse killed it',
+];
+
+/**
+ * Productions that die in casting or pre-production. Frees everyone attached. The orchestrator
+ * handles the player's booking (and pay-or-play). Returns the cancelled movies.
+ */
+export function tickCancellations(state: GameState, ws: WorkingSet, bus: EventBus): Movie[] {
+  const out: Movie[] = [];
+  for (const movie of ws.movies.values()) {
+    if (movie.status !== 'casting' && movie.status !== 'pre-production') continue;
+    const rng = rngFor(state.worldSeed, movie.id, state.week, 'cancel');
+    if (!rng.chance(CANCEL_CHANCE[movie.budgetTier])) continue;
+    movie.status = 'cancelled';
+    movie.cancelledWeek = state.week;
+    movie.cancelledReason = rng.pick(CANCEL_REASONS);
+    for (const c of movie.cast) {
+      const person = ws.people.get(c.personId);
+      if (!person) continue;
+      person.activeMovieIds = person.activeMovieIds.filter((id) => id !== movie.id);
+      markDirty(ws, 'people', person.id);
+    }
+    const director = ws.directors.get(movie.directorId);
+    if (director && director.activeMovieId === movie.id) {
+      director.activeMovieId = undefined;
+      markDirty(ws, 'directors', director.id);
+    }
+    markDirty(ws, 'movies', movie.id);
+    out.push(movie);
+    if (movie.budget >= 40_000_000 && !hasPlayer(movie, state.player.id)) {
+      bus.emit('industry', `${movie.title} collapses in pre-production`, `${ws.studios.get(movie.studioId)?.name}'s $${(movie.budget / 1e6).toFixed(0)}M ${movie.genres.join('/')} is dead: ${movie.cancelledReason}.`);
+    }
+  }
+  return out;
 }

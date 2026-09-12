@@ -64,7 +64,7 @@ const DIRECTOR_FILL: { tier: DirectorTier; count: number }[] = [
 export function studioFromTemplate(universeId: Id, id: Id): Studio | undefined {
   const s = STUDIOS.find((t) => t.id === id);
   if (!s) return undefined;
-  return { id: s.id, universeId, name: s.name, identity: s.identity, description: s.description, reputation: s.reputation, playerRelationship: 50, slateTarget: s.slateTarget, greenlitThisYear: 0 };
+  return { id: s.id, universeId, name: s.name, identity: s.identity, description: s.description, reputation: s.reputation, playerRelationship: 50, slateTarget: s.slateTarget, greenlitThisYear: 0, dealTemper: 50 };
 }
 
 export interface UniverseSeed {
@@ -79,7 +79,7 @@ export interface UniverseSeed {
 export function seedUniverse(universeId: Id, worldSeed: number, week: number): UniverseSeed {
   const studios: Studio[] = STUDIOS.map((s) => ({
     id: s.id, universeId, name: s.name, identity: s.identity, description: s.description,
-    reputation: s.reputation, playerRelationship: 50, slateTarget: s.slateTarget, greenlitThisYear: 0,
+    reputation: s.reputation, playerRelationship: 50, slateTarget: s.slateTarget, greenlitThisYear: 0, dealTemper: 50,
   }));
 
   const names = new Set<string>();

@@ -55,7 +55,7 @@ describe('Living world — 10 idle years', () => {
 
   it('every non-casting movie is fully cast, and nothing gets stuck', () => {
     for (const m of movies) {
-      if (m.status === 'casting') continue;
+      if (m.status === 'casting' || m.status === 'cancelled') continue;
       expect(m.roles.every((r) => r.castPersonId)).toBe(true);
       expect(m.cast.length).toBe(m.roles.length);
       expect(game.state.week - m.announcedWeek < 120 || m.status === 'completed').toBe(true);
@@ -91,6 +91,15 @@ describe('Living world — 10 idle years', () => {
     expect(Math.max(...active.map((p) => p.attributes.acting))).toBeLessThanOrEqual(100);
     const busiest = Math.max(...active.map((p) => p.filmography.length));
     expect(busiest).toBeLessThan(50);
+  });
+
+  it('some productions collapse, and nobody stays attached to a dead film', () => {
+    const cancelled = movies.filter((m) => m.status === 'cancelled');
+    expect(cancelled.length).toBeGreaterThan(0);
+    expect(cancelled.length / movies.length).toBeLessThan(0.15);
+    const dead = new Set(cancelled.map((m) => m.id));
+    for (const p of people) for (const id of p.activeMovieIds) expect(dead.has(id)).toBe(false);
+    for (const d of game.ws.directors.values()) if (d.activeMovieId) expect(dead.has(d.activeMovieId)).toBe(false);
   });
 
   it('the population turns over: cohorts enter, actors retire, directors emerge', () => {

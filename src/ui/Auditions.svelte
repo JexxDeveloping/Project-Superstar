@@ -2,7 +2,7 @@
   import { store } from './store.svelte';
   import { formatDate } from '../core/TimeEngine';
   import { formatMoney } from '../industry/BoxOfficeEngine';
-  import { applyBlockedReason } from '../industry/AuditionEngine';
+  import { applyBlockedReason, readScriptBlockedReason } from '../industry/AuditionEngine';
 
   const s = $derived(store.state!);
   const history = $derived(s.applications.filter((a) => !['applied', 'audition_pending', 'offer', 'booked'].includes(a.status)).slice().reverse());
@@ -36,10 +36,14 @@
             <td class="muted tiny">{m && m.cast.length ? m.cast.slice(0, 2).map((c) => store.personName(c.personId)).join(', ') + (m.cast.length > 2 ? ` +${m.cast.length - 2}` : '') : 'Casting'}</td>
             <td class="num mono">{formatMoney(l.expectedSalary)}</td>
             <td class="num mono">{l.difficulty} / <span class:bad={s.player.attributes.acting < l.requiredActing}>{l.requiredActing}</span></td>
-            <td class="muted">{l.estimatedPrestige}</td>
-            <td class="muted">{l.estimatedCommercial}</td>
+            <td class="muted">{l.estimatedPrestige}{#if l.scriptRead}<span class="good"> ✓</span>{/if}</td>
+            <td class="muted">{l.estimatedCommercial}{#if l.scriptRead}<span class="good"> ✓</span>{/if}</td>
             <td class="muted tiny">{m ? formatDate(m.productionStartWeek, s.epochYear) : ''}<br />{m?.productionWeeks} wks</td>
             <td class="right">
+              {#if !l.scriptRead}
+                {@const rb = readScriptBlockedReason(s, l.id)}
+                <button class="small ghost" title={rb ?? 'Read the script (1 action): exact bands + a small edge in the room'} disabled={!!rb || store.actionsRemaining === 0} onclick={() => store.plan({ type: 'read_script', listingId: l.id })}>Read script</button>
+              {/if}
               {#if app}
                 <button class="small" onclick={() => (store.openListingId = l.id)}><span class="tag {STATUS[app.status][1]}">{STATUS[app.status][0]}</span></button>
               {:else if s.weekPlan.some((a) => a.type === 'apply' && a.listingId === l.id)}

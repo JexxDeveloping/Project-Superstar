@@ -97,13 +97,13 @@
           <p class="muted">"{app.directorReaction}"</p>
           <div class="card" style="margin-top:12px">
             <div class="row spread wrap">
-              <div><strong>{listing.roleType}</strong> · {formatMoney(listing.expectedSalary)} paid on wrap · {movie.productionWeeks}-week shoot from {formatDate(movie.productionStartWeek, s.epochYear)}</div>
+              <div><strong>{listing.roleType}</strong> · opening at {formatMoney(app.contract?.terms.baseSalary ?? listing.expectedSalary)} · {movie.productionWeeks}-week shoot from {formatDate(movie.productionStartWeek, s.epochYear)}</div>
               <div class="row">
                 <button class="danger ghost" onclick={() => { store.declineOffer(listingId); close(); }}>Decline</button>
-                <button class="primary" onclick={() => { store.acceptOffer(listingId); close(); }}>Accept role</button>
+                <button class="primary" onclick={() => { close(); store.openContractListingId = listingId; }}>Review the deal ▸</button>
               </div>
             </div>
-            <div class="muted tiny" style="margin-top:6px">Offer lapses {formatDate(app.offerExpiresWeek!, s.epochYear)}. Contract negotiation arrives in a later phase.</div>
+            <div class="muted tiny" style="margin-top:6px">Offer lapses {formatDate(app.offerExpiresWeek!, s.epochYear)}.</div>
           </div>
         </section>
       {:else if app?.status === 'booked' || app?.status === 'in_production'}

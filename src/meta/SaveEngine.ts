@@ -11,7 +11,7 @@ import {
   type Studio, type WorkingSet,
 } from '../core/GameState';
 
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 export interface SaveSlot {
   universeId: Id;
@@ -52,6 +52,14 @@ class SimDatabase extends Dexie {
     // NPC/director career fields). Indexes are unchanged; Phase 1 hot states are flagged
     // incompatible by `listSaves` rather than migrated.
     this.version(2).stores({
+      people: 'id, universeId, status, [universeId+status]',
+      movies: 'id, universeId, status, [universeId+status]',
+      studios: 'id, universeId',
+      directors: 'id, universeId',
+      saves: 'universeId, savedAt',
+    });
+    // v3 (Phase 3): contracts on cast entries, agents in hot state, studio deal temper, cancelled films.
+    this.version(3).stores({
       people: 'id, universeId, status, [universeId+status]',
       movies: 'id, universeId, status, [universeId+status]',
       studios: 'id, universeId',

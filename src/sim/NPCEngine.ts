@@ -97,6 +97,8 @@ export function generateActor(
     lastWorkedWeek: tier === 'unknown' ? week - WEEKS_PER_YEAR : week - rng.int(4, 40),
     peakStarPower: star,
     activeMovieIds: [],
+    backendEarnings: 0,
+    headToHead: [],
   };
 }
 

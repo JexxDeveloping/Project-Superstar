@@ -14,6 +14,8 @@ import { rngFor, type Rng } from '../core/RNG';
 import type { EventBus } from '../core/EventBus';
 import { ageInYears } from '../sim/ActorEngine';
 import { shortlistFor } from './CastingEngine';
+import { agentEffects, agentFor } from '../world/AgentEngine';
+import { recordSigning } from './ContractEngine';
 
 export const OFFER_WINDOW_WEEKS = 2;
 export const MAX_OPEN_LISTINGS = 7;
@@ -142,7 +144,9 @@ export function refreshListings(state: GameState, ws: WorkingSet, bus: EventBus)
       if (role.castPersonId || listedRoleIds.has(role.id) || appliedRoleIds.has(role.id)) continue;
       if (!fitsPlayer(state, role)) continue;
       const rng = rngFor(state.worldSeed, movie.id, movie.announcedWeek, `listing:${role.id}`);
-      if (!rng.chance(listingVisibility(player.attributes.starPower, movie.budgetTier, role.roleType))) continue;
+      // A well-connected agent gets you into rooms a tier above your name.
+      const effectiveStar = player.attributes.starPower + agentEffects(agentFor(state)).visibilityBoost * 12;
+      if (!rng.chance(listingVisibility(effectiveStar, movie.budgetTier, role.roleType))) continue;
       const director = ws.directors.get(movie.directorId) as Director;
       const listing: AuditionListing = {
         id: `l-${role.id}`,
@@ -233,8 +237,36 @@ export function resolveApplications(state: GameState, ws: WorkingSet, bus: Event
       roleType: listing.roleType,
       appliedWeek: state.week - 1, // planned last week, submitted as this week opens
       status: 'applied',
+      source: 'audition',
     });
     bus.emit('audition', `Applied: ${listing.characterName}`, 'Your reel and headshot are in. Casting responds next week.');
+  }
+}
+
+/** Why the player can't read this script now, or null. */
+export function readScriptBlockedReason(state: GameState, listingId: Id): string | null {
+  const listing = findListing(state, listingId);
+  if (!listing) return 'Listing is no longer open.';
+  if (listing.scriptRead) return 'Already read.';
+  if (state.weekPlan.some((a) => a.type === 'read_script' && a.listingId === listingId)) return 'Already planned this week.';
+  return null;
+}
+
+/** Reading a script sharpens the fuzzy bands to near-exact and gives a small edge in the room. */
+export const SCRIPT_READ_AUDITION_BONUS = 2;
+
+export function resolveScriptReads(state: GameState, ws: WorkingSet, bus: EventBus): void {
+  for (const action of state.weekPlan) {
+    if (action.type !== 'read_script') continue;
+    const listing = findListing(state, action.listingId);
+    const movie = listing ? ws.movies.get(listing.movieId) : undefined;
+    if (!listing || !movie || listing.scriptRead) continue;
+    const director = ws.directors.get(movie.directorId) as Director;
+    const rng = rngFor(state.worldSeed, movie.id, state.week, `script-read:${listing.roleId}`);
+    listing.scriptRead = true;
+    listing.estimatedPrestige = estimateBand(movie.hidden.scriptQuality * 0.7 + director.prestige * 0.3, rng, 3);
+    listing.estimatedCommercial = estimateBand(movie.hidden.commercialPotential, rng, 3);
+    bus.emit('audition', `Read the script: ${movie.title}`, `Prestige looks ${listing.estimatedPrestige.toLowerCase()}, commercial potential ${listing.estimatedCommercial.toLowerCase()}. You'll walk into the room knowing the part.`);
   }
 }
 
@@ -276,7 +308,8 @@ export function performAudition(
   const relationship = (director.playerRelationship - 50) / 10;
   const variance = rng.variance(8);
 
-  const score = clamp(fundamentals + prepScore + relationship - energyPenalty - stressPenalty + variance, 0, 100);
+  const scriptBonus = listing.scriptRead ? SCRIPT_READ_AUDITION_BONUS : 0;
+  const score = clamp(fundamentals + prepScore + scriptBonus + relationship - energyPenalty - stressPenalty + variance, 0, 100);
 
   const reaction = directorReaction(score, {
     genreWeak: genreSkill < listing.requiredActing - 5,
@@ -301,7 +334,7 @@ function directorReaction(
   if (score >= 80) notes.push(rng.pick(['Commanding read — the room went quiet.', 'Exactly the energy on the page, and then some.', 'That was the take we have been waiting for all day.']));
   else if (score >= 65) notes.push(rng.pick(['Strong emotional delivery.', 'Confident, well-prepared, hit the beats.', 'Good instincts; the director leaned in.']));
   else if (score >= 50) notes.push(rng.pick(['Solid but unremarkable.', 'Competent read; nothing that jumped out.', 'Hit the lines, missed the moment.']));
-  else if (score >= 35) notes.push(rng.pick(['Nerves showed. The second pass was better.', 'Underpowered — the character never arrived.', 'The room was polite. That is not a good sign.']));
+  else if (score >= 28) notes.push(rng.pick(['Nerves showed. The second pass was better.', 'Underpowered, but the character was in there somewhere.', 'The room was polite. Hard to tell what that means.']));
   else notes.push(rng.pick(['Rough. Lines dropped, energy flat.', 'Not ready for this one.', 'A hard no in the room.']));
 
   if (ctx.genreWeak) notes.push(`There are concerns about your ${ctx.genre.toLowerCase()} experience.`);
@@ -319,9 +352,11 @@ export function acceptOffer(state: GameState, ws: WorkingSet, listingId: Id): { 
   const app = findApplication(state, listingId);
   const listing = findListing(state, listingId);
   if (!app || !listing || app.status !== 'offer') throw new Error('No live offer for that listing.');
+  if (app.contract && app.contract.status !== 'open') throw new Error('That offer is no longer on the table.');
   const movie = ws.movies.get(listing.movieId);
   const conflict = movie ? shootConflict(state, ws, movie) : null;
   if (conflict) throw new Error(`Can't take this one: ${conflict} Decline it, or let the offer lapse.`);
+  if (movie && app.contract) recordSigning(ws, movie, app.contract);
   app.status = 'booked';
   return { app, listing };
 }

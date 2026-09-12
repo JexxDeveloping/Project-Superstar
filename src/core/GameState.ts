@@ -98,6 +98,21 @@ export interface Person {
   retiredWeek?: number;
   /** Movie ids the person is currently attached to (cast, not yet resolved). */
   activeMovieIds: Id[];
+  /** Representation (player only in Phase 3). */
+  agentId?: Id;
+  /** Bonuses + points paid out at run end, net of commission (player). */
+  backendEarnings: number;
+  /** Every audition the player was scored against a named competitor: the raw material for rivalries. */
+  headToHead: HeadToHeadRecord[];
+}
+
+export interface HeadToHeadRecord {
+  personId: Id;
+  week: number;
+  movieId: Id;
+  roleType: RoleType;
+  /** Did the player out-read this competitor in the room? */
+  won: boolean;
 }
 
 export interface Studio {
@@ -113,6 +128,8 @@ export interface Studio {
   slateTarget: number;
   /** Films greenlit in the current calendar year. */
   greenlitThisYear: number;
+  /** How the studio remembers dealing with the player: 50 neutral; lower = they open lower and walk sooner. */
+  dealTemper: number; // 0–100
 }
 
 export interface Director {
@@ -155,12 +172,14 @@ export interface CastEntry {
   roleType: RoleType;
   billing: number; // 1 = top billed
   salary: number;
+  /** Negotiated terms (player only); NPCs are paid `salary` flat. */
+  contract?: ContractTerms;
   /** Set when production wraps. */
   performance?: PerformanceResult;
 }
 
 export type MovieStatus =
-  | 'casting' | 'pre-production' | 'filming' | 'post-production' | 'released' | 'completed';
+  | 'casting' | 'pre-production' | 'filming' | 'post-production' | 'released' | 'completed' | 'cancelled';
 
 export interface BoxOfficeWeek {
   week: number; // absolute week index
@@ -201,6 +220,9 @@ export interface Movie {
   productionWeeks: number;
   /** Weeks the shoot has waited for a cast member (the player) who was on another set. */
   holdWeeks?: number;
+  /** Set when a production falls apart before cameras roll. */
+  cancelledWeek?: number;
+  cancelledReason?: string;
   /** Set when production wraps. */
   wrapWeek?: number;
   releaseWeek?: number;
@@ -266,6 +288,83 @@ export interface MovieResult {
 }
 
 // ---------------------------------------------------------------------------
+// Agents & contracts
+// ---------------------------------------------------------------------------
+
+export interface Agent {
+  id: Id;
+  firstName: string;
+  lastName: string;
+  agency: string;
+  /** 1 boutique … 5 elite. */
+  level: number;
+  connections: number; // 0–100
+  negotiation: number; // 0–100
+  commission: number; // fraction, e.g. 0.1
+  specialization: Genre | 'general';
+  /** Won't represent anyone below this star power. */
+  minStarPower: number;
+}
+
+export interface BonusTier {
+  /** Worldwide gross as a multiple of production budget. */
+  multiple: number;
+  amount: number;
+}
+
+export interface ContractTerms {
+  baseSalary: number;
+  bonuses: BonusTier[];
+  /** Percent of worldwide gross from dollar one. */
+  grossPoints: number;
+  /** Percent of "net profit" — Hollywood accounting; pays close to nothing. */
+  netPoints: number;
+  /** 1 = top billed. */
+  billing: number;
+  sequelOption: boolean;
+  /** Locked rate for a sequel if the option is exercised. */
+  sequelOptionRate?: number;
+  promoWeeks: number;
+  payOrPlay: boolean;
+}
+
+export type CounterMove = 'higher_salary' | 'backend' | 'top_billing' | 'drop_sequel' | 'pay_or_play';
+export type StudioResponse = 'accepted' | 'countered' | 'held' | 'withdrew';
+
+export interface NegotiationEvent {
+  round: number;
+  move: CounterMove;
+  response: StudioResponse;
+  text: string;
+}
+
+export interface ContractOffer {
+  terms: ContractTerms;
+  original: ContractTerms;
+  round: number;
+  maxRounds: number;
+  /** Hidden: how much the studio will put up with before walking (0–100). */
+  patience: number;
+  /** Hidden: the player's bargaining strength (0–100). */
+  leverage: number;
+  status: 'open' | 'accepted' | 'withdrawn' | 'declined';
+  log: NegotiationEvent[];
+  /** What your agent thinks the room is like (accuracy depends on the agent). */
+  agentRead: string;
+  /** Moves already used (each can be pushed once). */
+  used: CounterMove[];
+}
+
+export interface ContractPayout {
+  bonus: number;
+  gross: number;
+  net: number;
+  commission: number;
+  /** What actually lands in the player's account. */
+  total: number;
+}
+
+// ---------------------------------------------------------------------------
 // Hot state: auditions, production, weekly plan
 // ---------------------------------------------------------------------------
 
@@ -285,6 +384,8 @@ export interface AuditionListing {
   competitorIds: Id[];
   postedWeek: number;
   expiresWeek: number;
+  /** The player read the script: bands are near-exact and the audition gets a small edge. */
+  scriptRead?: boolean;
 }
 
 export type PrepChoice =
@@ -313,6 +414,10 @@ export interface Application {
   roleType: RoleType;
   appliedWeek: number;
   status: ApplicationStatus;
+  /** How the role came: auditioned for, or offered outright. */
+  source: 'audition' | 'direct';
+  /** The deal on the table (set when the status becomes `offer`). */
+  contract?: ContractOffer;
   /** Chosen during the audition week; resolved at End Week. */
   prep?: PrepChoice;
   auditionWeek?: number;
@@ -353,10 +458,11 @@ export type PlannedAction =
   | { type: 'acting_class' }
   | { type: 'genre_training'; genre: Genre }
   | { type: 'prepare_role' }
+  | { type: 'read_script'; listingId: Id }
   | { type: 'apply'; listingId: Id };
 
 export type TimelineCategory =
-  | 'time' | 'training' | 'audition' | 'casting' | 'production' | 'release' | 'box_office' | 'result' | 'finance' | 'industry';
+  | 'time' | 'training' | 'audition' | 'casting' | 'contract' | 'agent' | 'production' | 'release' | 'box_office' | 'result' | 'finance' | 'industry';
 
 export interface TimelineEvent {
   week: number;
@@ -390,6 +496,10 @@ export interface GameState {
   weeklyExpenses: number;
   /** Counter so procedurally generated ids stay unique and seeds stable. */
   genCounter: number;
+  /** The agent roster for this universe (small; lives in hot state). */
+  agents: Agent[];
+  /** Agents currently offering to represent the player. */
+  agentApproaches: Id[];
 }
 
 /**

@@ -15,6 +15,8 @@ import type { EventBus } from '../core/EventBus';
 import { ageInYears } from '../sim/ActorEngine';
 import { generateActor, takenNames } from '../sim/NPCEngine';
 import { attachPerson } from './MovieEngine';
+import { VERDICT_RANK } from './BoxOfficeEngine';
+import { agentEffects, agentFor } from '../world/AgentEngine';
 
 /** Star power the studio "expects" for a role at each budget level. */
 export const EXPECTED_STAR: Record<BudgetTier, number> = {
@@ -34,8 +36,31 @@ function starWeight(movie: Movie): number {
 // Player: callbacks
 // ---------------------------------------------------------------------------
 
+/** The player's recent record as casting sees it: average performance and verdict of the last three films. */
+export function trackRecord(player: Person, ws: WorkingSet): { avgPerformance: number | null; avgVerdictRank: number | null; films: number } {
+  const recent = player.filmography.slice(-3).filter((f) => f.performance);
+  if (recent.length === 0) return { avgPerformance: null, avgVerdictRank: null, films: player.filmography.length };
+  const avgPerformance = recent.reduce((s, f) => s + (f.performance?.score ?? 0), 0) / recent.length;
+  const verdicts = recent.map((f) => ws.movies.get(f.movieId)?.boxOffice?.verdict).filter((v): v is NonNullable<typeof v> => !!v);
+  const avgVerdictRank = verdicts.length ? verdicts.reduce((s, v) => s + VERDICT_RANK[v], 0) / verdicts.length : null;
+  return { avgPerformance, avgVerdictRank, films: player.filmography.length };
+}
+
+export interface CallbackContext {
+  /** Strength of the best NPC on the shortlist relative to the player (fit points; + means they're stronger). */
+  competitionGap: number;
+  record: ReturnType<typeof trackRecord>;
+  agentBonus: number;
+}
+
+/**
+ * Probability the player is invited to audition (Part 1's full factor list):
+ * acting, genre skill, star power vs. tier, previous performances, director & studio relationship,
+ * agent, reputation, professionalism, connections, competition, randomness (applied by the caller).
+ * Typecasting and perceived-vs-real star power plug in here in Phase 5.
+ */
 export function callbackProbability(
-  player: Person, listing: AuditionListing, movie: Movie, director: Director, studio: Studio,
+  player: Person, listing: AuditionListing, movie: Movie, director: Director, studio: Studio, ctx: CallbackContext,
 ): number {
   const actingGap = player.attributes.acting - listing.requiredActing;
   let p = 0.2 + 0.7 * sigmoid(actingGap / 7); // 0.2–0.9 driven by acting vs. requirement
@@ -46,26 +71,90 @@ export function callbackProbability(
   const starGap = player.attributes.starPower - EXPECTED_STAR[movie.budgetTier];
   p *= starGap < 0 ? clamp(1 + starGap / 60, 0.45, 1) : 1 + Math.min(0.25, starGap / 200);
 
+  // Track record: rooms remember what you did last time.
+  if (ctx.record.avgPerformance !== null) p += (ctx.record.avgPerformance - 2.5) * 0.05;
+  if (ctx.record.avgVerdictRank !== null) p += (ctx.record.avgVerdictRank - 2) * 0.03;
+  p += clamp(player.momentum / 100, -0.5, 0.5) * 0.1;
+
   p += (player.attributes.connections / 100) * 0.12;
   p += ((player.attributes.reputation - 50) / 100) * 0.08;
   p += ((player.attributes.professionalism - 50) / 100) * 0.05;
   p += ((director.playerRelationship - 50) / 100) * 0.15;
   p += ((studio.playerRelationship - 50) / 100) * 0.08;
+  p += ctx.agentBonus;
   p -= listing.difficulty / 400;
-  p -= listing.competitorIds.length * 0.02;
+  // Competition: a shortlist that clearly outclasses you closes doors; one you outclass opens them.
+  p -= clamp(ctx.competitionGap, -15, 25) * 0.008;
 
   return clamp(p, 0.05, 0.95);
 }
 
+/** The player's fit for a role on the same scale NPCs are shortlisted on. */
+export function playerFit(state: GameState, movie: Movie, role: Role): number {
+  return roleFit(state.player, role, movie, state.week);
+}
+
+export function bestAlternativeFit(worldSeed: number, movie: Movie, role: Role, ws: WorkingSet, week: number): number {
+  const list = shortlistFor(worldSeed, movie, role, ws, week, 1);
+  return list.length ? roleFit(list[0], role, movie, week) : 0;
+}
+
 export function decideCallback(
-  worldSeed: number, week: number, player: Person, listing: AuditionListing, ws: WorkingSet,
+  state: GameState, listing: AuditionListing, ws: WorkingSet,
 ): { callback: boolean; probability: number } {
+  const player = state.player;
   const movie = ws.movies.get(listing.movieId) as Movie;
   const director = ws.directors.get(movie.directorId) as Director;
   const studio = ws.studios.get(movie.studioId) as Studio;
-  const probability = callbackProbability(player, listing, movie, director, studio);
-  const rng = rngFor(worldSeed, player.id, week, `callback:${listing.id}`);
+  const role = movie.roles.find((r) => r.id === listing.roleId) as Role;
+  const ctx: CallbackContext = {
+    competitionGap: bestAlternativeFit(state.worldSeed, movie, role, ws, state.week) - playerFit(state, movie, role),
+    record: trackRecord(player, ws),
+    agentBonus: agentEffects(agentFor(state)).callbackBonus,
+  };
+  const probability = callbackProbability(player, listing, movie, director, studio, ctx);
+  const rng = rngFor(state.worldSeed, player.id, state.week, `callback:${listing.id}`);
   return { callback: rng.chance(probability), probability };
+}
+
+// ---------------------------------------------------------------------------
+// Direct offers — once you're a name, roles come to you
+// ---------------------------------------------------------------------------
+
+/** Weekly chance a studio sends a role straight to the player, by star power. */
+export function directOfferChance(starPower: number): number {
+  if (starPower < 60) return 0;
+  return clamp(0.05 + ((starPower - 60) / 30) * 0.3, 0.05, 0.4);
+}
+
+/**
+ * Find a role in a casting film where the player is the studio's first choice and hand it over
+ * without an audition. Returns the movie/role picked, or null.
+ */
+export function findDirectOffer(state: GameState, ws: WorkingSet): { movie: Movie; role: Role } | null {
+  const player = state.player;
+  const rng = rngFor(state.worldSeed, player.id, state.week, 'direct-offer');
+  const chance = directOfferChance(player.attributes.starPower) * agentEffects(agentFor(state)).directOfferMultiplier;
+  if (chance <= 0 || !rng.chance(chance)) return null;
+  const busyIds = new Set(state.applications.filter((a) => a.status === 'applied' || a.status === 'audition_pending' || a.status === 'offer' || a.status === 'booked').map((a) => a.movieId));
+  const options: { movie: Movie; role: Role; fit: number }[] = [];
+  for (const movie of ws.movies.values()) {
+    if (movie.status !== 'casting' || movie.castingCloseWeek <= state.week || busyIds.has(movie.id)) continue;
+    if (EXPECTED_STAR[movie.budgetTier] > player.attributes.starPower + 15) continue;
+    for (const role of movie.roles) {
+      if (role.castPersonId || role.roleType === 'Minor' || role.roleType === 'Extra') continue;
+      if (role.genderPref !== 'any' && player.gender !== role.genderPref && player.gender !== 'nonbinary') continue;
+      const age = ageInYears(player, state.week);
+      if (age < role.ageMin - 4 || age > role.ageMax + 4) continue;
+      const fit = playerFit(state, movie, role);
+      const alt = bestAlternativeFit(state.worldSeed, movie, role, ws, state.week);
+      if (fit >= alt - 2) options.push({ movie, role, fit });
+    }
+  }
+  if (options.length === 0) return null;
+  options.sort((a, b) => b.fit - a.fit || (a.movie.id < b.movie.id ? -1 : 1));
+  const pick = options[Math.min(options.length - 1, rng.int(0, Math.min(2, options.length - 1)))];
+  return { movie: pick.movie, role: pick.role };
 }
 
 // ---------------------------------------------------------------------------

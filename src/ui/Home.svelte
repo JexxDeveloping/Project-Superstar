@@ -1,6 +1,8 @@
 <script lang="ts">
   import { store } from './store.svelte';
   import WeeklyReport from './WeeklyReport.svelte';
+  import AgentPanel from './AgentPanel.svelte';
+  import { describeTerms } from '../industry/ContractEngine';
   import { GENRES, type Genre, type PlannedAction } from '../core/GameState';
   import { formatDate } from '../core/TimeEngine';
   import { ACTION_COSTS, starTier } from '../sim/ActorEngine';
@@ -12,6 +14,7 @@
 
   const topGenres = $derived([...GENRES].sort((a, b) => p.genres[b] - p.genres[a]).slice(0, 5));
   const inFlight = $derived(s.applications.filter((a) => ['applied', 'audition_pending', 'offer', 'booked'].includes(a.status)));
+  const offers = $derived(s.applications.filter((a) => a.status === 'offer' && a.contract));
   const releases = $derived(s.trackedMovieIds.map((id) => store.movie(id)).filter((m) => !!m));
 
   function label(a: PlannedAction): string {
@@ -21,6 +24,7 @@
       case 'genre_training': return `${a.genre} training ($100)`;
       case 'prepare_role': return 'Prepare for role';
       case 'apply': { const l = s.listings.find((x) => x.id === a.listingId); return `Apply: ${l?.characterName ?? 'role'}`; }
+      case 'read_script': { const l = s.listings.find((x) => x.id === a.listingId); return `Read script: ${l ? store.movie(l.movieId)?.title : 'film'}`; }
     }
   }
   const STATUS: Record<string, string> = {
@@ -97,6 +101,32 @@
 
   <div class="stack">
     <WeeklyReport events={s.weeklyReport} title={`This week — ${formatDate(s.week, s.epochYear)}`} />
+
+    {#if offers.length > 0}
+      <section class="panel offers">
+        <div class="panel-head"><h3>{offers.length === 1 ? 'Offer on the table' : `${offers.length} offers on the table`}</h3><span class="muted tiny">{offers.length > 1 ? 'Shoots can\'t overlap — pick a direction' : 'Negotiate or sign'}</span></div>
+        <div class="grid" style="grid-template-columns: repeat({Math.min(3, offers.length)}, minmax(0, 1fr))">
+          {#each offers as o (o.listingId)}
+            {@const m = store.movie(o.movieId)}
+            {@const l = s.listings.find((x) => x.id === o.listingId)}
+            <div class="card stack">
+              <div><strong>{o.movieTitle}</strong> <span class="tag {o.source === 'direct' ? 'accent' : 'good'}">{o.source === 'direct' ? 'Direct offer' : 'Won in the room'}</span></div>
+              <div class="muted small-text">{o.characterName} · {o.roleType} · {m?.genres.join(' / ')} · {m ? store.studio(m.studioId)?.name : ''}</div>
+              <div class="mono" style="font-size:18px;font-weight:800">{formatMoney(o.contract!.terms.baseSalary)}</div>
+              <div class="muted tiny">{describeTerms(o.contract!.terms).slice(1).join(' · ') || 'Flat fee'}</div>
+              <div class="muted tiny">Budget {m ? formatMoney(m.budget) : ''} · Prestige {l?.estimatedPrestige ?? '?'} · Commercial {l?.estimatedCommercial ?? '?'}</div>
+              <div class="muted tiny">Shoot {m ? formatDate(m.productionStartWeek, s.epochYear) : ''} · {m?.productionWeeks} wks · lapses {o.offerExpiresWeek !== undefined ? formatDate(o.offerExpiresWeek, s.epochYear) : ''}</div>
+              <div class="row" style="margin-top:4px">
+                <button class="small danger ghost" onclick={() => store.declineOffer(o.listingId)}>Decline</button>
+                <button class="small primary" onclick={() => (store.openContractListingId = o.listingId)}>Negotiate / sign ▸</button>
+              </div>
+            </div>
+          {/each}
+        </div>
+      </section>
+    {/if}
+
+    <AgentPanel />
 
     <section class="panel">
       <div class="panel-head"><h3>Auditions in motion</h3><button class="small ghost" onclick={() => (store.screen = 'auditions')}>Board ▸</button></div>
