@@ -109,6 +109,9 @@ export function npcPerformanceContext(person: Person, movie: Movie, roleType: Ro
   return { roleType, prepBonus: clamp((person.attributes.professionalism - 30) / 10, 0, 7), performanceMod: movie.productionQualityMod * 0.5 };
 }
 
+/** Multiplier on everything a released film earns an actor (XP, craft, critical rep, reputation). */
+export const GAIN_SCALE = 1.35;
+
 /**
  * Career consequences of P — and nothing else. Applied when the film's run ends.
  * Routed to: critical reputation, director trust, XP, genre/acting experience.
@@ -120,20 +123,23 @@ export function performanceImpacts(movie: Movie, roleType: RoleType, ws: Working
   const director = ws.directors.get(movie.directorId) as Director;
   const out: StatDelta[] = [];
 
-  const critRep = [0, -2, 0, 1.5, 3.5, 6][perf.score] * weight;
+  // Gains are scaled up by GAIN_SCALE (2026-09-13 balance: +35% on everything a released film earns);
+  // the one penalty (critical rep for a 1/5) is left at its original size.
+  const critBase = [0, -2, 0, 1.5, 3.5, 6][perf.score] * weight;
+  const critRep = critBase > 0 ? critBase * GAIN_SCALE : critBase;
   if (critRep !== 0) out.push({ target: 'criticalReputation', label: 'Critical Reputation', amount: round1(critRep) });
 
   const dirTrust = [0, -4, 0, 3, 6, 10][perf.score];
   if (dirTrust !== 0) out.push({ target: `director:${director.id}`, label: `${director.firstName} ${director.lastName} trust`, amount: dirTrust });
 
-  const xp = perf.score * 40 + Math.round(inf * 100);
+  const xp = Math.round((perf.score * 40 + Math.round(inf * 100)) * GAIN_SCALE);
   out.push({ target: 'xp', label: 'XP', amount: xp });
 
-  const genreGain = round1(1.0 + (perf.score - 1) * 0.6);
+  const genreGain = round1((1.0 + (perf.score - 1) * 0.6) * GAIN_SCALE);
   out.push({ target: `genre:${genre}`, label: `${genre} skill`, amount: genreGain });
-  out.push({ target: 'acting', label: 'Acting', amount: round1(0.4 + perf.score * 0.3) });
+  out.push({ target: 'acting', label: 'Acting', amount: round1((0.4 + perf.score * 0.3) * GAIN_SCALE) });
 
-  if (perf.score >= 4) out.push({ target: 'reputation', label: 'Reputation', amount: round1(1 * weight) });
+  if (perf.score >= 4) out.push({ target: 'reputation', label: 'Reputation', amount: round1(1 * weight * GAIN_SCALE) });
   return out;
 }
 

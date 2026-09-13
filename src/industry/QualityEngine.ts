@@ -12,6 +12,7 @@ import {
 } from '../core/GameState';
 import { rngFor } from '../core/RNG';
 import { roleInfluence } from './MovieEngine';
+import { GAIN_SCALE } from './PerformanceEngine';
 
 /** How mainstream a genre's audience is — audiences rate crowd-pleasers kinder than critics do. */
 const AUDIENCE_TILT: Partial<Record<Genre, number>> = {
@@ -85,10 +86,11 @@ export function evaluateQuality(
 export function qualityImpacts(movie: Movie, roleInf: number, quality: QualityResult): StatDelta[] {
   const out: StatDelta[] = [];
   const w = 0.4 + 0.6 * roleInf;
-  const prestige = { Poor: -1.5, Mediocre: -0.5, Solid: 0.3, Good: 1, Excellent: 2, Masterpiece: 3 }[quality.band] * w;
+  const base = { Poor: -1.5, Mediocre: -0.5, Solid: 0.3, Good: 1, Excellent: 2, Masterpiece: 3 }[quality.band] * w;
+  const prestige = base > 0 ? base * GAIN_SCALE : base;
   if (prestige !== 0) out.push({ target: 'criticalReputation', label: 'Critical Reputation (film quality)', amount: Math.round(prestige * 10) / 10 });
   if (quality.band === 'Excellent' || quality.band === 'Masterpiece') {
-    out.push({ target: 'reputation', label: 'Reputation', amount: Math.round(1.5 * w * 10) / 10 });
+    out.push({ target: 'reputation', label: 'Reputation', amount: Math.round(1.5 * w * GAIN_SCALE * 10) / 10 });
   }
   return out;
 }
