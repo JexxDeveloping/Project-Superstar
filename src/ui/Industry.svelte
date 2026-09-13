@@ -8,6 +8,9 @@
   import { ageInYears, starTier } from '../sim/ActorEngine';
   import { GENRES, completedCredits, type Movie, type Person, type RecordSet } from '../core/GameState';
   import { WOM_CLASS, WOM_LABEL, tagClass, verdictClass } from './format';
+  import { VERDICT_RANK } from '../industry/BoxOfficeEngine';
+  import { TableSort } from './sort.svelte';
+  import SortTh from './SortTh.svelte';
   import type { EChartsOption } from 'echarts';
 
   type Tab = 'boxoffice' | 'calendar' | 'movies' | 'people';
@@ -16,8 +19,10 @@
   /** Sections of the Box Office tab, one at a time (title = this week's chart). */
   let sub = $state<SubView>('week');
   let peopleFilter = $state<'active' | 'newcomers' | 'retired'>('active');
-  let movieSort = $state<'recent' | 'gross' | 'quality'>('recent');
+  const movieSort = new TableSort('year', 'desc');
+  const peopleSort = new TableSort();
 
+  const STATUS_LABEL: Record<Movie['status'], string> = { casting: 'Casting', 'pre-production': 'Pre-production', filming: 'Filming', 'post-production': 'Post', released: 'In theaters', completed: 'Done', cancelled: 'Cancelled' };
   const s = $derived(store.state!);
   const movies = $derived([...(store.world?.movies.values() ?? [])]);
   const people = $derived([...(store.world?.people.values() ?? [])].filter((p) => !p.isPlayer));
@@ -57,11 +62,21 @@
     };
   });
 
-  const sortedMovies = $derived.by(() => {
-    if (movieSort === 'gross') return movies.slice().sort((a, b) => (b.boxOffice?.worldwide ?? -1) - (a.boxOffice?.worldwide ?? -1));
-    if (movieSort === 'quality') return movies.slice().sort((a, b) => (b.quality?.q ?? -1) - (a.quality?.q ?? -1));
-    return movies.slice().sort((a, b) => b.announcedWeek - a.announcedWeek);
-  });
+  const MOVIE_COLS = {
+    year: (m: Movie) => m.releaseWeek ?? m.announcedWeek,
+    title: (m: Movie) => m.title,
+    studio: (m: Movie) => store.studio(m.studioId)?.name,
+    genre: (m: Movie) => m.genres[0],
+    lead: (m: Movie) => (m.cast.length ? store.personName(m.cast.slice().sort((a, b) => a.billing - b.billing)[0].personId) : undefined),
+    director: (m: Movie) => { const d = store.director(m.directorId); return d ? `${d.lastName} ${d.firstName}` : undefined; },
+    budget: (m: Movie) => m.budget,
+    worldwide: (m: Movie) => m.boxOffice?.worldwide,
+    recoup: (m: Movie) => m.boxOffice?.recoup,
+    quality: (m: Movie) => (m.status === 'completed' || m.status === 'released' ? m.quality?.criticScore : undefined),
+    status: (m: Movie) => STATUS_LABEL[m.status],
+    verdict: (m: Movie) => (m.boxOffice?.verdict ? VERDICT_RANK[m.boxOffice.verdict] : undefined),
+  };
+  const sortedMovies = $derived(movieSort.apply(movies, MOVIE_COLS));
 
   const filteredPeople = $derived.by(() => {
     const yearStart = s.week - 52;
@@ -69,15 +84,26 @@
     if (peopleFilter === 'retired') list = people.filter((p) => p.status === 'retired').sort((a, b) => b.peakStarPower - a.peakStarPower);
     else if (peopleFilter === 'newcomers') list = people.filter((p) => p.status === 'active' && p.startWeek >= yearStart).sort((a, b) => b.ceiling - a.ceiling);
     else list = people.filter((p) => p.status === 'active').sort((a, b) => b.attributes.starPower - a.attributes.starPower);
-    return list.slice(0, 120);
+    return peopleSort.apply(list, PEOPLE_COLS).slice(0, 120);
   });
+  const PEOPLE_COLS = {
+    actor: (p: Person) => `${p.lastName} ${p.firstName}`,
+    age: (p: Person) => ageInYears(p, s.week),
+    tier: (p: Person) => (p.status === 'retired' ? p.peakStarPower : p.attributes.starPower),
+    star: (p: Person) => p.attributes.starPower,
+    acting: (p: Person) => p.attributes.acting,
+    peak: (p: Person) => p.peakStarPower,
+    films: (p: Person) => completedCredits(p).length,
+    gross: (p: Person) => p.cumulativeGross ?? 0,
+    review: (p: Person) => p.reviewAvg,
+    now: (p: Person) => { const a = p.activeMovieIds[0] ? store.movie(p.activeMovieIds[0]) : undefined; return a ? `${STATUS_LABEL[a.status]} — ${a.title}` : p.status === 'retired' ? 'Retired' : 'Available'; },
+  };
 
   const thisYear = $derived(dateForWeek(s.week, s.epochYear).year);
   const yearRecords = $derived<RecordSet>(s.records.byYear[thisYear] ?? {});
   const lastYearRecords = $derived<RecordSet>(s.records.byYear[thisYear - 1] ?? {});
   const trends = $derived(GENRES.map((g) => ({ g, t: s.genreTrends[g] ?? 1 })).sort((a, b) => b.t - a.t));
 
-  const STATUS_LABEL: Record<Movie['status'], string> = { casting: 'Casting', 'pre-production': 'Pre-production', filming: 'Filming', 'post-production': 'Post', released: 'In theaters', completed: 'Done', cancelled: 'Cancelled' };
 </script>
 
 <div class="stack">
@@ -222,16 +248,13 @@
     </section>
   {:else if tab === 'movies'}
     <section class="panel">
-      <div class="panel-head"><h3>All movies</h3>
-        <div class="row"><span class="muted tiny">Sort</span>
-          <button class="small" class:primary={movieSort === 'recent'} onclick={() => (movieSort = 'recent')}>Recent</button>
-          <button class="small" class:primary={movieSort === 'gross'} onclick={() => (movieSort = 'gross')}>Gross</button>
-          <button class="small" class:primary={movieSort === 'quality'} onclick={() => (movieSort = 'quality')}>Quality</button>
-        </div>
-      </div>
+      <div class="panel-head"><h3>All movies</h3><span class="muted tiny">click a column to sort · again to flip</span></div>
       <div class="table-wrap">
       <table class="data">
-        <thead><tr><th>Year</th><th>Movie</th><th>Studio</th><th>Genre</th><th>Lead</th><th>Director</th><th class="num">Budget</th><th class="num">Worldwide</th><th class="num">Returned</th><th>Quality</th><th>Status</th><th>Verdict</th></tr></thead>
+        <thead><tr>
+          <SortTh sort={movieSort} key="year" label="Year" /><SortTh sort={movieSort} key="title" label="Movie" /><SortTh sort={movieSort} key="studio" label="Studio" /><SortTh sort={movieSort} key="genre" label="Genre" /><SortTh sort={movieSort} key="lead" label="Lead" /><SortTh sort={movieSort} key="director" label="Director" />
+          <SortTh sort={movieSort} key="budget" label="Budget" num /><SortTh sort={movieSort} key="worldwide" label="Worldwide" num /><SortTh sort={movieSort} key="recoup" label="Returned" num /><SortTh sort={movieSort} key="quality" label="Quality" /><SortTh sort={movieSort} key="status" label="Status" /><SortTh sort={movieSort} key="verdict" label="Verdict" />
+        </tr></thead>
         <tbody>
           {#each sortedMovies.slice(0, 150) as m (m.id)}
             {@const d = store.director(m.directorId)}
@@ -266,7 +289,10 @@
       </div>
       <div class="table-wrap">
       <table class="data">
-        <thead><tr><th>Actor</th><th class="num">Age</th><th>Tier</th><th class="num">Star</th><th class="num">Acting</th><th class="num">Peak</th><th class="num">Films</th><th class="num">Cumulative gross</th><th class="num">Avg review</th><th>Now</th></tr></thead>
+        <thead><tr>
+          <SortTh sort={peopleSort} key="actor" label="Actor" /><SortTh sort={peopleSort} key="age" label="Age" num /><SortTh sort={peopleSort} key="tier" label="Tier" /><SortTh sort={peopleSort} key="star" label="Star" num /><SortTh sort={peopleSort} key="acting" label="Acting" num /><SortTh sort={peopleSort} key="peak" label="Peak" num />
+          <SortTh sort={peopleSort} key="films" label="Films" num /><SortTh sort={peopleSort} key="gross" label="Cumulative gross" num /><SortTh sort={peopleSort} key="review" label="Avg review" num /><SortTh sort={peopleSort} key="now" label="Now" />
+        </tr></thead>
         <tbody>
           {#each filteredPeople as p (p.id)}
             {@const active = p.activeMovieIds[0] ? store.movie(p.activeMovieIds[0]) : undefined}

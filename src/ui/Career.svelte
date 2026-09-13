@@ -3,9 +3,27 @@
   import { dateForWeek } from '../core/TimeEngine';
   import { formatMoney } from '../industry/BoxOfficeEngine';
   import { tagClass, verdictClass } from './format';
+  import { VERDICT_RANK } from '../industry/BoxOfficeEngine';
+  import { TableSort } from './sort.svelte';
+  import SortTh from './SortTh.svelte';
+  import type { FilmCredit } from '../core/GameState';
 
   const s = $derived(store.state!);
-  const credits = $derived(s.player.filmography.slice().reverse());
+  const sort = new TableSort();
+  const COLS = {
+    year: (c: FilmCredit) => store.movie(c.movieId)?.releaseWeek,
+    age: (c: FilmCredit) => c.ageAtRelease,
+    movie: (c: FilmCredit) => store.movie(c.movieId)?.title,
+    role: (c: FilmCredit) => c.characterName,
+    genre: (c: FilmCredit) => store.movie(c.movieId)?.genres[0],
+    budget: (c: FilmCredit) => store.movie(c.movieId)?.budget,
+    boxOffice: (c: FilmCredit) => { const m = store.movie(c.movieId); return m?.boxOffice?.finished ? m.boxOffice.worldwide : undefined; },
+    backend: (c: FilmCredit) => c.backend,
+    performance: (c: FilmCredit) => c.performance?.score,
+    rating: (c: FilmCredit) => { const m = store.movie(c.movieId); return m?.boxOffice?.finished ? m.quality?.criticScore : undefined; },
+    result: (c: FilmCredit) => { const m = store.movie(c.movieId); return m?.boxOffice?.verdict ? VERDICT_RANK[m.boxOffice.verdict] : c.status === 'cancelled' ? -1 : undefined; },
+  };
+  const credits = $derived(sort.apply(s.player.filmography.slice().reverse(), COLS));
 </script>
 
 <section class="panel">
@@ -13,8 +31,11 @@
   {#if credits.length === 0}
     <p class="muted">No credits yet. Book a role and finish the shoot.</p>
   {:else}
+    <div class="table-wrap">
     <table class="data">
-      <thead><tr><th>Year</th><th>Age</th><th>Movie</th><th>Role</th><th>Genre</th><th class="num">Budget</th><th class="num">Box Office</th><th class="num">Backend</th><th>Performance</th><th>Movie Rating</th><th>Result</th></tr></thead>
+      <thead><tr>
+        <SortTh {sort} key="year" label="Year" /><SortTh {sort} key="age" label="Age" /><SortTh {sort} key="movie" label="Movie" /><SortTh {sort} key="role" label="Role" /><SortTh {sort} key="genre" label="Genre" /><SortTh {sort} key="budget" label="Budget" num /><SortTh {sort} key="boxOffice" label="Box Office" num /><SortTh {sort} key="backend" label="Backend" num /><SortTh {sort} key="performance" label="Performance" /><SortTh {sort} key="rating" label="Movie Rating" /><SortTh {sort} key="result" label="Result" />
+      </tr></thead>
       <tbody>
         {#each credits as c}
           {@const m = store.movie(c.movieId)}
@@ -35,5 +56,6 @@
         {/each}
       </tbody>
     </table>
+    </div>
   {/if}
 </section>

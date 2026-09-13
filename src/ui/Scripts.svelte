@@ -4,10 +4,23 @@
   import { formatMoney } from '../industry/BoxOfficeEngine';
   import { formatDate } from '../core/TimeEngine';
   import { campaignBand } from '../world/ReleaseCalendarEngine';
-  import { CAMPAIGN_LABEL } from './format';
+  import { CAMPAIGN_LABEL, bandRank } from './format';
+  import { TableSort } from './sort.svelte';
+  import SortTh from './SortTh.svelte';
+  import type { AuditionListing } from '../core/GameState';
 
   const s = $derived(store.state!);
-  const listings = $derived(s.listings.slice().sort((a, b) => Number(!!a.scriptRead) - Number(!!b.scriptRead)));
+  const sort = new TableSort();
+  const COLS = {
+    movie: (l: AuditionListing) => store.movie(l.movieId)?.title,
+    role: (l: AuditionListing) => l.characterName,
+    budget: (l: AuditionListing) => store.movie(l.movieId)?.budget,
+    prestige: (l: AuditionListing) => bandRank(l.estimatedPrestige),
+    commercial: (l: AuditionListing) => bandRank(l.estimatedCommercial),
+    marketing: (l: AuditionListing) => { const m = store.movie(l.movieId); return m ? ['minimal', 'modest', 'heavy'].indexOf(campaignBand(m)) : undefined; },
+    shoot: (l: AuditionListing) => store.movie(l.movieId)?.productionStartWeek,
+  };
+  const listings = $derived(sort.apply(s.listings.slice().sort((a, b) => Number(!!a.scriptRead) - Number(!!b.scriptRead)), COLS));
 </script>
 
 <div class="stack">
@@ -19,7 +32,7 @@
     {:else}
       <div class="table-wrap">
       <table class="data">
-        <thead><tr><th>Movie</th><th>Role</th><th class="num">Budget</th><th>Prestige</th><th>Commercial</th><th>Marketing</th><th>Shoot</th><th></th></tr></thead>
+        <thead><tr><SortTh {sort} key="movie" label="Movie" /><SortTh {sort} key="role" label="Role" /><SortTh {sort} key="budget" label="Budget" num /><SortTh {sort} key="prestige" label="Prestige" /><SortTh {sort} key="commercial" label="Commercial" /><SortTh {sort} key="marketing" label="Marketing" /><SortTh {sort} key="shoot" label="Shoot" /><th></th></tr></thead>
         <tbody>
           {#each listings as l (l.id)}
             {@const m = store.movie(l.movieId)}

@@ -4,9 +4,28 @@
   import { formatMoney } from '../industry/BoxOfficeEngine';
   import { applyBlockedReason, readScriptBlockedReason } from '../industry/AuditionEngine';
   import { campaignBand } from '../world/ReleaseCalendarEngine';
-  import { CAMPAIGN_LABEL } from './format';
+  import { CAMPAIGN_LABEL, bandRank } from './format';
+  import { TableSort } from './sort.svelte';
+  import SortTh from './SortTh.svelte';
+  import type { AuditionListing } from '../core/GameState';
 
   const s = $derived(store.state!);
+  const sort = new TableSort();
+  const COLS = {
+    movie: (l: AuditionListing) => store.movie(l.movieId)?.title,
+    genre: (l: AuditionListing) => store.movie(l.movieId)?.genres[0],
+    budget: (l: AuditionListing) => store.movie(l.movieId)?.budget,
+    role: (l: AuditionListing) => l.characterName,
+    director: (l: AuditionListing) => { const m = store.movie(l.movieId); const d = m ? store.director(m.directorId) : undefined; return d ? `${d.lastName} ${d.firstName}` : undefined; },
+    cast: (l: AuditionListing) => store.movie(l.movieId)?.cast.length,
+    salary: (l: AuditionListing) => l.expectedSalary,
+    difficulty: (l: AuditionListing) => l.difficulty,
+    prestige: (l: AuditionListing) => bandRank(l.estimatedPrestige),
+    commercial: (l: AuditionListing) => bandRank(l.estimatedCommercial),
+    marketing: (l: AuditionListing) => { const m = store.movie(l.movieId); return m ? ['minimal', 'modest', 'heavy'].indexOf(campaignBand(m)) : undefined; },
+    shoot: (l: AuditionListing) => store.movie(l.movieId)?.productionStartWeek,
+  };
+  const listings = $derived(sort.apply(s.listings, COLS));
 
   const STATUS: Record<string, [string, string]> = {
     applied: ['Awaiting callback', 'info'], no_callback: ['No callback', 'bad'], audition_pending: ['Audition next week', 'warn'],
@@ -20,10 +39,12 @@
     <div class="table-wrap">
     <table class="data">
       <thead>
-        <tr><th>Movie</th><th>Genre</th><th class="num">Budget</th><th>Role</th><th>Director</th><th>Cast so far</th><th class="num">Salary</th><th class="num">Diff. / Req.</th><th>Prestige</th><th>Commercial</th><th>Marketing</th><th>Shoot</th><th></th></tr>
+        <tr>
+          <SortTh {sort} key="movie" label="Movie" /><SortTh {sort} key="genre" label="Genre" /><SortTh {sort} key="budget" label="Budget" num /><SortTh {sort} key="role" label="Role" /><SortTh {sort} key="director" label="Director" /><SortTh {sort} key="cast" label="Cast so far" /><SortTh {sort} key="salary" label="Salary" num /><SortTh {sort} key="difficulty" label="Diff. / Req." num /><SortTh {sort} key="prestige" label="Prestige" /><SortTh {sort} key="commercial" label="Commercial" /><SortTh {sort} key="marketing" label="Marketing" /><SortTh {sort} key="shoot" label="Shoot" /><th></th>
+        </tr>
       </thead>
       <tbody>
-        {#each s.listings as l (l.id)}
+        {#each listings as l (l.id)}
           {@const m = store.movie(l.movieId)}
           {@const d = m ? store.director(m.directorId) : undefined}
           {@const app = s.applications.find((a) => a.listingId === l.id)}

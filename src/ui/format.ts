@@ -34,3 +34,7 @@ export function tagClass(t: BoxOfficeTag): string {
 export function pct(n: number): string {
   return `${n >= 0 ? '+' : ''}${Math.round(n * 100)}%`;
 }
+
+/** Fuzzy estimate bands in order, for sorting. */
+export const BAND_ORDER = ['Very Low', 'Low', 'Low–Moderate', 'Moderate', 'Moderate–High', 'High', 'Very High'];
+export function bandRank(b: string): number { return BAND_ORDER.indexOf(b); }
