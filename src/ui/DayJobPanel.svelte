@@ -56,7 +56,8 @@
 <style>
   .head-toggle { display: flex; align-items: center; gap: 8px; background: transparent; border: none; padding: 0; color: inherit; cursor: pointer; min-width: 0; }
   .head-toggle h3 { margin: 0; }
-  .chev { display: inline-block; color: var(--muted); font-size: 12px; transition: transform 0.15s; }
+  .chev { display: inline-block; color: var(--muted); font-size: 18px; line-height: 1; transition: transform 0.15s; }
+  .head-toggle:hover .chev { color: var(--text); }
   .chev.open { transform: rotate(90deg); }
   .summary { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* One job per row: the panel lives in a 380px column and three cards side by side spilled into the next column. */
