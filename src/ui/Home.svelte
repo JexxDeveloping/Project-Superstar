@@ -86,28 +86,9 @@
 
     <DayJobPanel />
 
-    <section class="panel">
-      <div class="panel-head"><h3>Current project</h3></div>
-      {#if s.activeProduction}
-        {@const m = store.movie(s.activeProduction.movieId)}
-        <div><strong>{m?.title}</strong> — {s.activeProduction.characterName} ({s.activeProduction.roleType})</div>
-        <div class="muted small-text">Filming · Week {s.activeProduction.currentWeek} of {s.activeProduction.totalWeeks}</div>
-        <div class="meter" style="margin-top:8px"><span style="width:{(100 * s.activeProduction.currentWeek) / s.activeProduction.totalWeeks}%"></span></div>
-      {:else if inFlight.some((a) => a.status === 'booked')}
-        {@const a = inFlight.find((x) => x.status === 'booked')!}
-        {@const l = s.listings.find((x) => x.id === a.listingId)}
-        {@const m = l ? store.movie(l.movieId) : undefined}
-        <div><strong>{m?.title}</strong> — {l?.characterName} ({l?.roleType})</div>
-        <div class="muted small-text">Booked. Shoot begins {m ? formatDate(m.productionStartWeek, s.epochYear) : 'soon'}.</div>
-      {:else}
-        <p class="muted">No project. Hit the audition board.</p>
-      {/if}
-    </section>
   </div>
 
   <div class="stack">
-    <WeeklyReport events={s.weeklyReport} title={`This week — ${formatDate(s.week, s.epochYear)}`} />
-
     {#if offers.length > 0}
       <section class="panel offers">
         <div class="panel-head"><h3>{offers.length === 1 ? 'Offer on the table' : `${offers.length} offers on the table`}</h3><span class="muted tiny">{offers.length > 1 ? 'Shoots can\'t overlap — pick a direction' : 'Negotiate or sign'}</span></div>
@@ -132,8 +113,22 @@
       </section>
     {/if}
 
-    <AgentPanel />
-
+    <section class="panel">
+      <div class="panel-head"><h3>Current project</h3></div>
+      {#if s.activeProduction}
+        {@const m = store.movie(s.activeProduction.movieId)}
+        <div><strong>{m?.title}</strong> — {s.activeProduction.characterName} ({s.activeProduction.roleType})</div>
+        <div class="muted small-text">Filming · Week {s.activeProduction.currentWeek} of {s.activeProduction.totalWeeks}</div>
+        <div class="meter" style="margin-top:8px"><span style="width:{(100 * s.activeProduction.currentWeek) / s.activeProduction.totalWeeks}%"></span></div>
+      {:else if inFlight.some((a) => a.status === 'booked')}
+        {@const a = inFlight.find((x) => x.status === 'booked')!}
+        {@const m = store.movie(a.movieId)}
+        <div><strong>{m?.title ?? a.movieTitle}</strong> — {a.characterName} ({a.roleType})</div>
+        <div class="muted small-text">Booked. Shoot begins {m ? formatDate(m.productionStartWeek, s.epochYear) : 'soon'}.</div>
+      {:else}
+        <p class="muted">No project. Hit the audition board.</p>
+      {/if}
+    </section>
     <section class="panel">
       <div class="panel-head"><h3>Auditions in motion</h3><button class="small ghost" onclick={() => (store.screen = 'auditions')}>Board ▸</button></div>
       {#if inFlight.length === 0}
@@ -174,6 +169,9 @@
         </table>
       {/if}
     </section>
+    <WeeklyReport events={s.weeklyReport} title={`This week — ${formatDate(s.week, s.epochYear)}`} />
+
+    <AgentPanel />
   </div>
 </div>
 
