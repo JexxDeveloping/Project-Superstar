@@ -169,7 +169,7 @@
         </table>
       {/if}
     </section>
-    <WeeklyReport events={s.weeklyReport} title={`This week's events — ${formatDate(s.week, s.epochYear)}`} collapseKey="weekly-report-collapsed" />
+    <WeeklyReport events={s.weeklyReport} title="This week's events" collapseKey="weekly-report-collapsed" />
 
     <AgentPanel />
   </div>
