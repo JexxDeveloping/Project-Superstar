@@ -296,7 +296,8 @@
   .title-tab.active { border-bottom-color: var(--accent); }
   .title-tab h2 { margin: 0; }
   .sub { background: transparent; border: none; padding: 0 0 4px; border-bottom: 2px solid transparent; border-radius: 0; color: var(--muted); font-size: 15px; cursor: pointer; }
-  .sub:hover, .title-tab:hover { color: var(--text); background: rgba(255, 255, 255, 0.04); border-bottom-color: var(--accent); border-radius: 6px 6px 0 0; }
+  /* Hover: no fill on the word; the gold underline appears and glows upward into the text. */
+  .sub:hover, .title-tab:hover { color: var(--text); background: transparent; border-bottom-color: var(--accent); box-shadow: 0 6px 14px -6px rgba(229, 184, 74, 0.55); }
   .sub.active { color: var(--text); border-bottom-color: var(--accent); }
   tr.mine td { background: rgba(229, 184, 74, 0.06); }
   tr.holiday td { background: rgba(90, 169, 230, 0.05); }
