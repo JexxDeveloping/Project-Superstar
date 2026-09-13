@@ -21,7 +21,7 @@
     <div class="table-wrap">
     <table class="data">
       <thead>
-        <tr><th>Movie</th><th>Genre</th><th class="num">Budget</th><th>Role</th><th>Director</th><th>Cast so far</th><th class="num">Salary</th><th class="num">Diff. / Req.</th><th>Prestige</th><th>Commercial</th><th>Campaign</th><th>Shoot</th><th></th></tr>
+        <tr><th>Movie</th><th>Genre</th><th class="num">Budget</th><th>Role</th><th>Director</th><th>Cast so far</th><th class="num">Salary</th><th class="num">Diff. / Req.</th><th>Prestige</th><th>Commercial</th><th>Marketing</th><th>Shoot</th><th></th></tr>
       </thead>
       <tbody>
         {#each s.listings as l (l.id)}

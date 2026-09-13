@@ -101,7 +101,7 @@
               <div class="muted small-text">{o.characterName} · {o.roleType} · {m?.genres.join(' / ')} · {m ? store.studio(m.studioId)?.name : ''}</div>
               <div class="mono" style="font-size:18px;font-weight:800">{formatMoney(o.contract!.terms.baseSalary)}</div>
               <div class="muted tiny">{describeTerms(o.contract!.terms).slice(1).join(' · ') || 'Flat fee'}</div>
-              <div class="muted tiny">Budget {m ? formatMoney(m.budget) : ''} · Prestige {l?.estimatedPrestige ?? '?'} · Commercial {l?.estimatedCommercial ?? '?'} · Campaign {m ? CAMPAIGN_LABEL[campaignBand(m)] : '?'}</div>
+              <div class="muted tiny">Budget {m ? formatMoney(m.budget) : ''} · Prestige {l?.estimatedPrestige ?? '?'} · Commercial {l?.estimatedCommercial ?? '?'} · Marketing {m ? CAMPAIGN_LABEL[campaignBand(m)] : '?'}</div>
               <div class="muted tiny">Shoot {m ? formatDate(m.productionStartWeek, s.epochYear) : ''} · {m?.productionWeeks} wks · lapses {o.offerExpiresWeek !== undefined ? formatDate(o.offerExpiresWeek, s.epochYear) : ''}</div>
               <div class="row" style="margin-top:4px">
                 <button class="small danger ghost" onclick={() => store.declineOffer(o.listingId)}>Decline</button>

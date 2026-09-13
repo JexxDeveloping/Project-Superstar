@@ -19,7 +19,7 @@
     {:else}
       <div class="table-wrap">
       <table class="data">
-        <thead><tr><th>Movie</th><th>Role</th><th class="num">Budget</th><th>Prestige</th><th>Commercial</th><th>Campaign</th><th>Shoot</th><th></th></tr></thead>
+        <thead><tr><th>Movie</th><th>Role</th><th class="num">Budget</th><th>Prestige</th><th>Commercial</th><th>Marketing</th><th>Shoot</th><th></th></tr></thead>
         <tbody>
           {#each listings as l (l.id)}
             {@const m = store.movie(l.movieId)}

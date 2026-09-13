@@ -72,7 +72,7 @@
     {@const window = m.releaseWeek !== undefined ? windowName(m.releaseWeek) : undefined}
     <section class="panel">
       <div class="panel-head">
-        <div><h2>{m.title}</h2><div class="muted tiny">{m.genres.join(' / ')} · {store.studio(m.studioId)?.name} · Budget {formatMoney(m.budget)} · Campaign {CAMPAIGN_LABEL[campaignBand(m)].toLowerCase()} ({formatMoney(m.marketingBudget)})</div></div>
+        <div><h2>{m.title}</h2><div class="muted tiny">{m.genres.join(' / ')} · {store.studio(m.studioId)?.name} · Budget {formatMoney(m.budget)} · Marketing {CAMPAIGN_LABEL[campaignBand(m)].toLowerCase()} ({formatMoney(m.marketingBudget)})</div></div>
         <span class="tag {m.status === 'released' ? 'accent' : 'info'}">{m.status === 'released' ? 'In theaters' : 'Post-production'}</span>
       </div>
       {#if m.status === 'post-production'}
