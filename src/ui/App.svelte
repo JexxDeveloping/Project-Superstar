@@ -13,6 +13,7 @@
   import Scripts from './Scripts.svelte';
   import ContractModal from './ContractModal.svelte';
   import ResultScreen from './ResultScreen.svelte';
+  import SettingsModal from './SettingsModal.svelte';
 
   const NAV: { id: Screen; label: string }[] = [
     { id: 'home', label: 'Home' },
@@ -47,6 +48,7 @@
           </button>
         {/each}
         <div class="spacer"></div>
+        <button class="nav ghost gear" onclick={() => (store.settingsOpen = true)} title="Settings"><span class="gear-icon">⚙</span> Settings</button>
         <button class="nav ghost" onclick={() => store.quitToMenu()}>Save & quit</button>
       </nav>
       <main class="main">
@@ -63,6 +65,9 @@
     </div>
   </div>
 
+  {#if store.settingsOpen}
+    <SettingsModal />
+  {/if}
   {#key store.version}
   {#if store.state.pendingResults.length > 0}
     <ResultScreen result={store.state.pendingResults[0]} />
@@ -87,5 +92,6 @@
   .nav.active { background: var(--panel-2); border-color: var(--border); color: var(--accent); }
   .badge { background: var(--accent); color: #1a1408; border-radius: 999px; padding: 0 7px; font-size: 11px; }
   .spacer { flex: 1; }
+  .gear-icon { font-size: 16px; line-height: 1; }
   .main { flex: 1; overflow: auto; padding: 18px 22px; }
 </style>

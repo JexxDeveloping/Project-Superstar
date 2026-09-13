@@ -9,7 +9,7 @@
  * No DOM, no framework. SaveEngine is optional so tests can run fully in memory.
  */
 import {
-  createWorkingSet, markDirty, type GameState, type Id, type PlannedAction, type PrepChoice,
+  GENRES, createWorkingSet, markDirty, type GameState, type Id, type PlannedAction, type PrepChoice,
   type TimelineEvent, type WorkingSet,
 } from './GameState';
 import { seedFromString } from './RNG';
@@ -35,6 +35,8 @@ export const START_WEEK = 8;
 export const PREHISTORY_WEEKS = 52;
 export const ACTIONS_PER_WEEK = 3;
 export const WEEKLY_EXPENSES = 250;
+/** Playtest cheat codes accepted by `Game.applyCheat`. */
+export const CHEAT_CODES = { superstar: 'SUPERSTAR' } as const;
 
 function actionCash(action: PlannedAction): number {
   return ACTION_COSTS[action.type].cash;
@@ -321,6 +323,26 @@ export class Game {
 
   dismissResult(): void {
     this.state.pendingResults.shift();
+  }
+
+  /**
+   * Playtest cheat codes (entered on the Settings screen). Returns what happened, or throws on an
+   * unknown code. Kept on the facade so the change persists and is visible to every engine.
+   */
+  applyCheat(code: string): string {
+    const normalized = code.trim().toUpperCase();
+    const p = this.state.player;
+    if (normalized === CHEAT_CODES.superstar) {
+      p.attributes.acting = 100;
+      p.attributes.starPower = 100;
+      p.peakStarPower = 100;
+      for (const g of GENRES) p.genres[g] = 100;
+      p.cash += 100_000;
+      markDirty(this.ws, 'people', p.id);
+      this.state.weeklyReport.push({ week: this.state.week, category: 'time', title: 'Cheat: SUPERSTAR', description: 'Acting 100, Star Power 100, every genre 100, +$100,000. For playtesting.' });
+      return 'Acting 100 · Star Power 100 · all genres 100 · +$100,000';
+    }
+    throw new Error('Unknown code.');
   }
 
   // --- the turn --------------------------------------------------------------

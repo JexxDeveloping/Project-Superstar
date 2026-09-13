@@ -38,6 +38,10 @@ class GameStore {
   openContractListingId = $state<Id | null>(null);
   /** The studio's reply to the last counter, for the modal to show. */
   lastNegotiation = $state<NegotiationEvent | null>(null);
+  /** Settings window (gear button). */
+  settingsOpen = $state(false);
+  /** Result of the last cheat code entered, for the settings window to show. */
+  lastCheat = $state<string | null>(null);
 
   private game: Game | null = null;
   private readonly save = new SaveEngine();
@@ -129,6 +133,7 @@ class GameStore {
     this.command(() => { this.lastNegotiation = this.game!.counterOffer(listingId, move); });
   }
   hireAgent(agentId: Id): void { this.command(() => this.game!.hireAgent(agentId)); }
+  applyCheat(code: string): void { this.command(() => { this.lastCheat = this.game!.applyCheat(code); }); }
   takeDayJob(id: DayJobId): void { this.command(() => this.game!.takeDayJob(id)); }
   quitDayJob(): void { this.command(() => this.game!.quitDayJob()); }
   fireAgent(): void { this.command(() => this.game!.fireAgent()); }
