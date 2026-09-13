@@ -11,7 +11,10 @@
   import type { EChartsOption } from 'echarts';
 
   type Tab = 'boxoffice' | 'calendar' | 'movies' | 'people';
+  type SubView = 'week' | 'records' | 'verdicts' | 'trends';
   let tab = $state<Tab>('boxoffice');
+  /** Sections of the Box Office tab, one at a time (title = this week's chart). */
+  let sub = $state<SubView>('week');
   let peopleFilter = $state<'active' | 'newcomers' | 'retired'>('active');
   let movieSort = $state<'recent' | 'gross' | 'quality'>('recent');
 
@@ -27,7 +30,7 @@
   function weekly(m: Movie): number { const w = lastWeek(m); return w.domestic + w.international; }
   function prevRank(m: Movie): number | undefined { const ws = m.boxOffice!.weeks; return ws.length > 1 ? ws[ws.length - 2].rank : undefined; }
   const recentlyClosed = $derived(
-    movies.filter((m) => m.status === 'completed' && m.boxOffice).sort((a, b) => lastWeek(b).week - lastWeek(a).week).slice(0, 8),
+    movies.filter((m) => m.status === 'completed' && m.boxOffice).sort((a, b) => lastWeek(b).week - lastWeek(a).week).slice(0, 14),
   );
 
   /** The next 20 weeks of the calendar, week by week, with everything that has claimed a date. */
@@ -78,89 +81,117 @@
 </script>
 
 <div class="stack">
-  <div class="row spread">
-    <h2>Industry</h2>
+  <div class="row spread wrap">
+    <div class="row subnav">
+      <button class="title-tab" class:active={tab === 'boxoffice' && sub === 'week'} onclick={() => { tab = 'boxoffice'; sub = 'week'; }}><h2>Industry</h2></button>
+      {#if tab === 'boxoffice'}
+        <button class="sub" class:active={sub === 'records'} onclick={() => (sub = 'records')}>Records</button>
+        <button class="sub" class:active={sub === 'verdicts'} onclick={() => (sub = 'verdicts')}>Recent Verdicts</button>
+        <button class="sub" class:active={sub === 'trends'} onclick={() => (sub = 'trends')}>Genre Trends</button>
+      {/if}
+    </div>
     <div class="row">
-      <button class="small" class:primary={tab === 'boxoffice'} onclick={() => (tab = 'boxoffice')}>Box Office</button>
+      <button class="small" class:primary={tab === 'boxoffice'} onclick={() => { tab = 'boxoffice'; sub = 'week'; }}>Box Office</button>
       <button class="small" class:primary={tab === 'calendar'} onclick={() => (tab = 'calendar')}>Release Calendar</button>
       <button class="small" class:primary={tab === 'movies'} onclick={() => (tab = 'movies')}>Movies ({movies.length})</button>
       <button class="small" class:primary={tab === 'people'} onclick={() => (tab = 'people')}>People ({people.length})</button>
     </div>
   </div>
 
-  {#if tab === 'boxoffice'}
-    <div class="grid grid-2">
-      <section class="panel">
-        <div class="panel-head"><h3>This week in theaters</h3><span class="muted tiny">{formatDate(s.week, s.epochYear)}{windowName(s.week) ? ` · ${windowName(s.week)}` : ''}</span></div>
-        {#if inTheaters.length === 0}
-          <p class="muted">Nothing on screens this week.</p>
-        {:else}
-          <Chart option={chartOption} height={Math.max(120, 30 * Math.min(8, inTheaters.length) + 30)} />
-          <div class="table-wrap">
-          <table class="data" style="margin-top:8px">
-            <thead><tr><th>#</th><th>Movie</th><th>Studio</th><th class="num">Week</th><th class="num">Domestic</th><th class="num">Change</th><th class="num">Total WW</th><th>WOM</th></tr></thead>
-            <tbody>
-              {#each inTheaters as m (m.id)}
-                {@const w = lastWeek(m)}
-                {@const prev = prevRank(m)}
-                {@const prevW = m.boxOffice!.weeks[m.boxOffice!.weeks.length - 2]}
-                <tr class:mine={mine.has(m.id)}>
-                  <td class="muted mono">{w.rank}{#if prev !== undefined}<span class="tiny {prev > w.rank! ? 'good' : prev < w.rank! ? 'bad' : 'muted'}"> {prev > w.rank! ? '▲' : prev < w.rank! ? '▼' : '·'}</span>{:else}<span class="tiny accent"> new</span>{/if}</td>
-                  <td><strong>{m.title}</strong>{#if mine.has(m.id)}<span class="tag accent" style="margin-left:6px">You</span>{/if}<div class="muted tiny">{m.genres.join(' / ')} · {store.personName(m.cast.find((c) => c.billing === 1)?.personId ?? '')} · budget {formatMoney(m.budget)}</div></td>
-                  <td class="muted">{store.studio(m.studioId)?.name}</td>
-                  <td class="num">{m.boxOffice!.weeks.length}</td>
-                  <td class="num mono">{formatMoney(w.domestic)}</td>
-                  <td class="num mono" class:good={prevW && w.domestic >= prevW.domestic} class:bad={prevW && w.domestic < prevW.domestic * 0.45}>{prevW ? `${w.domestic >= prevW.domestic ? '+' : ''}${Math.round(((w.domestic - prevW.domestic) / prevW.domestic) * 100)}%` : '—'}</td>
-                  <td class="num mono">{formatMoney(m.boxOffice!.worldwide)}</td>
-                  <td>{#if w.wom}<span class="tag {WOM_CLASS[w.wom]}">{WOM_LABEL[w.wom]}</span>{/if}</td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
-          </div>
-        {/if}
-      </section>
-      <div class="stack">
-        <section class="panel">
-          <div class="panel-head"><h3>Records</h3><span class="muted tiny">{thisYear} · all-time</span></div>
-          <table class="data">
-            <thead><tr><th></th><th>This year</th><th>Last year</th><th>All-time</th></tr></thead>
-            <tbody>
-              {#each [['Biggest opening', 'opening'], ['Biggest gross', 'gross'], ['Biggest bomb', 'bomb']] as [label, key]}
-                {@const k = key as keyof RecordSet}
-                <tr>
-                  <td class="muted">{label}</td>
-                  {#each [yearRecords[k], lastYearRecords[k], s.records.allTime[k]] as r}
-                    <td>{#if r}<strong>{r.title}</strong><div class="muted tiny mono">{formatMoney(r.amount)}{k === 'bomb' ? ' lost' : ''}</div>{:else}<span class="muted">—</span>{/if}</td>
-                  {/each}
-                </tr>
-              {/each}
-            </tbody>
-          </table>
-        </section>
-        <section class="panel">
-          <div class="panel-head"><h3>Recent verdicts</h3></div>
-          {#if recentlyClosed.length === 0}<p class="muted">No runs finished yet.</p>{:else}
-            <table class="data">
-              <thead><tr><th>Movie</th><th class="num">Worldwide</th><th class="num">Returned</th><th>Verdict</th></tr></thead>
-              <tbody>
-                {#each recentlyClosed as m (m.id)}
-                  <tr class:mine={mine.has(m.id)}><td><strong>{m.title}</strong><div class="muted tiny">{formatMoney(m.budget)} + {formatMoney(m.marketingBudget)} · {m.quality?.criticScore}% critics · {m.quality?.audienceScore}% audience</div></td><td class="num mono">{formatMoney(m.boxOffice!.worldwide)}</td><td class="num mono" title="Studio's share of the box office plus the film's afterlife, over budget + marketing">{m.boxOffice!.recoup?.toFixed(2)}×</td><td><span class="tag {verdictClass(m.boxOffice!.verdict)}">{m.boxOffice!.verdict}</span>{#each m.boxOffice!.tags ?? [] as t}<span class="tag {tagClass(t)}" style="margin-left:4px">{t}</span>{/each}</td></tr>
-                {/each}
-              </tbody>
-            </table>
-          {/if}
-        </section>
-        <section class="panel">
-          <div class="panel-head"><h3>What's in fashion</h3><span class="muted tiny">genre popularity drifts over the years</span></div>
-          <div class="row wrap">
-            {#each trends as { g, t }}
-              <span class="tag {t >= 1.08 ? 'good' : t <= 0.92 ? 'bad' : ''}" title={`${t.toFixed(2)}× normal`}>{g} · {trendLabel(t)}</span>
-            {/each}
-          </div>
-        </section>
+  {#if tab === 'boxoffice' && sub === 'week'}
+    <section class="panel">
+      <div class="panel-head">
+        <div><h3>This week in theaters</h3><div class="muted tiny">Weekend box office — {formatDate(s.week, s.epochYear)}</div></div>
+        <span class="muted tiny">{formatDate(s.week, s.epochYear)}{windowName(s.week) ? ` · ${windowName(s.week)}` : ''}</span>
       </div>
-    </div>
+      {#if inTheaters.length === 0}
+        <p class="muted">Nothing on screens this week.</p>
+      {:else}
+        <Chart option={chartOption} height={Math.max(120, 30 * Math.min(8, inTheaters.length) + 30)} />
+        <div class="table-wrap">
+        <table class="data" style="margin-top:8px">
+          <thead><tr><th>#</th><th>Movie</th><th>Studio</th><th>Genre</th><th class="num">Week</th><th class="num">Domestic</th><th class="num">Change</th><th class="num">Worldwide</th><th>WOM</th></tr></thead>
+          <tbody>
+            {#each inTheaters as m (m.id)}
+              {@const w = lastWeek(m)}
+              {@const prev = prevRank(m)}
+              {@const prevW = m.boxOffice!.weeks[m.boxOffice!.weeks.length - 2]}
+              <tr class:mine={mine.has(m.id)}>
+                <td class="muted mono">{w.rank}{#if prev !== undefined}<span class="tiny {prev > w.rank! ? 'good' : prev < w.rank! ? 'bad' : 'muted'}"> {prev > w.rank! ? '▲' : prev < w.rank! ? '▼' : '·'}</span>{:else}<span class="tiny accent"> new</span>{/if}</td>
+                <td><strong>{m.title}</strong>{#if mine.has(m.id)}<span class="tag accent" style="margin-left:6px">You</span>{/if}<div class="muted tiny">{m.genres.join(' / ')} · {store.personName(m.cast.find((c) => c.billing === 1)?.personId ?? '')} · budget {formatMoney(m.budget)}</div></td>
+                <td class="muted">{store.studio(m.studioId)?.name}</td>
+                <td>{m.genres[0]}</td>
+                <td class="num">{m.boxOffice!.weeks.length}</td>
+                <td class="num mono">{formatMoney(w.domestic)}</td>
+                <td class="num mono" class:good={prevW && w.domestic >= prevW.domestic} class:bad={prevW && w.domestic < prevW.domestic * 0.45}>{prevW ? `${w.domestic >= prevW.domestic ? '+' : ''}${Math.round(((w.domestic - prevW.domestic) / prevW.domestic) * 100)}%` : '—'}</td>
+                <td class="num mono">{formatMoney(m.boxOffice!.worldwide)}</td>
+                <td>{#if w.wom}<span class="tag {WOM_CLASS[w.wom]}">{WOM_LABEL[w.wom]}</span>{/if}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+        </div>
+      {/if}
+    </section>
+  {:else if tab === 'boxoffice' && sub === 'records'}
+    <section class="panel">
+      <div class="panel-head"><h3>Records</h3><span class="muted tiny">{thisYear} · last year · all-time</span></div>
+      <table class="data">
+        <thead><tr><th></th><th>This year</th><th>Last year</th><th>All-time</th></tr></thead>
+        <tbody>
+          {#each [['Biggest opening', 'opening'], ['Biggest gross', 'gross'], ['Biggest bomb', 'bomb']] as [label, key]}
+            {@const k = key as keyof RecordSet}
+            <tr>
+              <td class="muted">{label}</td>
+              {#each [yearRecords[k], lastYearRecords[k], s.records.allTime[k]] as r}
+                <td>{#if r}<strong>{r.title}</strong><div class="muted tiny mono">{formatMoney(r.amount)}{k === 'bomb' ? ' lost' : ''} · {dateForWeek(r.week, s.epochYear).year}</div>{:else}<span class="muted">—</span>{/if}</td>
+              {/each}
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    </section>
+  {:else if tab === 'boxoffice' && sub === 'verdicts'}
+    <section class="panel">
+      <div class="panel-head"><h3>Recent verdicts</h3><span class="muted tiny">the last {recentlyClosed.length} runs to finish</span></div>
+      {#if recentlyClosed.length === 0}<p class="muted">No runs finished yet.</p>{:else}
+        <div class="table-wrap">
+        <table class="data">
+          <thead><tr><th>Movie</th><th>Studio</th><th class="num">Budget + marketing</th><th>Reception</th><th class="num">Worldwide</th><th class="num">Returned</th><th>Verdict</th></tr></thead>
+          <tbody>
+            {#each recentlyClosed as m (m.id)}
+              <tr class:mine={mine.has(m.id)}>
+                <td><strong>{m.title}</strong>{#if mine.has(m.id)}<span class="tag accent" style="margin-left:6px">You</span>{/if}<div class="muted tiny">{m.genres.join(' / ')} · {dateForWeek(m.releaseWeek ?? lastWeek(m).week, s.epochYear).year}</div></td>
+                <td class="muted">{store.studio(m.studioId)?.name}</td>
+                <td class="num mono muted">{formatMoney(m.budget)} + {formatMoney(m.marketingBudget)}</td>
+                <td class="muted tiny">{m.quality?.criticScore}% critics · {m.quality?.audienceScore}% audience</td>
+                <td class="num mono">{formatMoney(m.boxOffice!.worldwide)}</td>
+                <td class="num mono" title="Studio's share of the box office plus the film's afterlife, over budget + marketing">{m.boxOffice!.recoup?.toFixed(2)}×</td>
+                <td><span class="tag {verdictClass(m.boxOffice!.verdict)}">{m.boxOffice!.verdict}</span>{#each m.boxOffice!.tags ?? [] as t}<span class="tag {tagClass(t)}" style="margin-left:4px">{t}</span>{/each}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+        </div>
+      {/if}
+    </section>
+  {:else if tab === 'boxoffice' && sub === 'trends'}
+    <section class="panel">
+      <div class="panel-head"><h3>Genre trends</h3><span class="muted tiny">what audiences want right now · drifts over the years</span></div>
+      <table class="data">
+        <thead><tr><th>Genre</th><th>Trend</th><th class="num">Popularity</th></tr></thead>
+        <tbody>
+          {#each trends as { g, t }}
+            <tr>
+              <td><strong>{g}</strong></td>
+              <td><span class="tag {t >= 1.08 ? 'good' : t <= 0.92 ? 'bad' : ''}">{trendLabel(t)}</span></td>
+              <td class="num mono muted">{t >= 1 ? '+' : ''}{Math.round((t - 1) * 100)}%</td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+      <p class="muted tiny" style="margin-top:8px">Hot genres open bigger and studios slate more of them; cold genres the reverse. Studios follow the fashion, which is how eras happen.</p>
+    </section>
   {:else if tab === 'calendar'}
     <section class="panel">
       <div class="panel-head"><h3>Release calendar — next 20 weeks</h3><span class="muted tiny">Studios claim dates at wrap; a bigger film can push a smaller one off its week</span></div>
@@ -260,6 +291,13 @@
 </div>
 
 <style>
+  .subnav { gap: 18px; align-items: baseline; }
+  .title-tab { background: transparent; border: none; padding: 0 0 4px; border-bottom: 2px solid transparent; border-radius: 0; color: inherit; cursor: pointer; }
+  .title-tab.active { border-bottom-color: var(--accent); }
+  .title-tab h2 { margin: 0; }
+  .sub { background: transparent; border: none; padding: 0 0 4px; border-bottom: 2px solid transparent; border-radius: 0; color: var(--muted); font-size: 15px; cursor: pointer; }
+  .sub:hover { color: var(--text); }
+  .sub.active { color: var(--text); border-bottom-color: var(--accent); }
   tr.mine td { background: rgba(229, 184, 74, 0.06); }
   tr.holiday td { background: rgba(90, 169, 230, 0.05); }
   .film { display: inline-block; padding: 3px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-2); font-size: 12px; }
