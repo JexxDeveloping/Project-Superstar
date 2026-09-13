@@ -6,11 +6,12 @@
  * them. The world then runs on its own for a year of "prehistory" before the player enters
  * (see Game.create), so theaters, slates and shortlists are already alive at week 1.
  */
-import { type Director, type Id, type Person, type Studio, type StudioIdentity } from '../core/GameState';
+import { type Director, type Id, type Person, type SlateProfile, type Studio, type StudioIdentity } from '../core/GameState';
 import { generateActor, type NpcTier } from '../sim/NPCEngine';
 import { generateDirector, type DirectorTier } from './DirectorEngine';
 
-interface StudioSpec { id: string; name: string; identity: StudioIdentity; description: string; reputation: number; slateTarget: number }
+interface StudioSpec { id: string; name: string; identity: StudioIdentity; description: string; reputation: number; slateTarget: number; slate?: SlateProfile }
+/** Twelve studios, ~98 films a year between them. The six added 2026-09-12 carry their own slate mixes. */
 const STUDIOS: StudioSpec[] = [
   { id: 'st-titan', name: 'Titan Pictures', identity: 'blockbuster', description: 'Huge blockbuster studio.', reputation: 82, slateTarget: 8 },
   { id: 'st-evergreen', name: 'Evergreen Films', identity: 'prestige', description: 'Prestige dramas and awards contenders.', reputation: 78, slateTarget: 7 },
@@ -18,6 +19,30 @@ const STUDIOS: StudioSpec[] = [
   { id: 'st-northstar', name: 'Northstar Entertainment', identity: 'mainstream', description: 'Mid-budget mainstream films.', reputation: 68, slateTarget: 12 },
   { id: 'st-horizon', name: 'Horizon Indie', identity: 'indie', description: 'Independent films on tight budgets.', reputation: 55, slateTarget: 20 },
   { id: 'st-redline', name: 'Redline Pictures', identity: 'genre', description: 'Horror, thrillers and genre fare.', reputation: 58, slateTarget: 10 },
+  {
+    id: 'st-meridian', name: 'Meridian Pictures', identity: 'blockbuster', description: 'Big-canvas action, science fiction and fantasy.', reputation: 79, slateTarget: 5,
+    slate: { tiers: [{ item: 'Medium', weight: 30 }, { item: 'Large', weight: 45 }, { item: 'Tentpole', weight: 25 }], genres: [{ item: 'Action', weight: 32 }, { item: 'Science Fiction', weight: 24 }, { item: 'Fantasy', weight: 22 }, { item: 'Thriller', weight: 22 }] },
+  },
+  {
+    id: 'st-lumina', name: 'Lumina Pictures', identity: 'blockbuster', description: 'Family spectacle, fantasy and musicals.', reputation: 76, slateTarget: 3,
+    slate: { tiers: [{ item: 'Medium', weight: 45 }, { item: 'Large', weight: 50 }, { item: 'Tentpole', weight: 5 }], genres: [{ item: 'Family', weight: 35 }, { item: 'Fantasy', weight: 25 }, { item: 'Musical', weight: 18 }, { item: 'Comedy', weight: 22 }] },
+  },
+  {
+    id: 'st-silverlantern', name: 'Silver Lantern Pictures', identity: 'prestige', description: 'Serious drama from micro-budget to mid-range.', reputation: 74, slateTarget: 4,
+    slate: { tiers: [{ item: 'Micro Indie', weight: 15 }, { item: 'Indie', weight: 25 }, { item: 'Small Studio', weight: 35 }, { item: 'Medium', weight: 25 }], genres: [{ item: 'Drama', weight: 40 }, { item: 'Historical', weight: 22 }, { item: 'Crime', weight: 18 }, { item: 'Mystery', weight: 20 }] },
+  },
+  {
+    id: 'st-apex', name: 'Apex Entertainment', identity: 'mainstream', description: 'Crowd-pleasers with big budgets.', reputation: 66, slateTarget: 4,
+    slate: { tiers: [{ item: 'Medium', weight: 50 }, { item: 'Large', weight: 40 }, { item: 'Tentpole', weight: 10 }], genres: [{ item: 'Action', weight: 28 }, { item: 'Comedy', weight: 20 }, { item: 'Thriller', weight: 20 }, { item: 'Romance', weight: 14 }, { item: 'Family', weight: 18 }] },
+  },
+  {
+    id: 'st-vantage', name: 'Vantage Studios', identity: 'mainstream', description: 'A steady slate of thrillers, crime and drama.', reputation: 64, slateTarget: 10,
+    slate: { tiers: [{ item: 'Small Studio', weight: 35 }, { item: 'Medium', weight: 45 }, { item: 'Large', weight: 20 }], genres: [{ item: 'Thriller', weight: 24 }, { item: 'Crime', weight: 20 }, { item: 'Drama', weight: 18 }, { item: 'Science Fiction', weight: 16 }, { item: 'Action', weight: 22 }] },
+  },
+  {
+    id: 'st-wraith', name: 'Wraith Films', identity: 'genre', description: 'Low-budget horror and dread.', reputation: 52, slateTarget: 7,
+    slate: { tiers: [{ item: 'Micro Indie', weight: 30 }, { item: 'Indie', weight: 45 }, { item: 'Small Studio', weight: 25 }], genres: [{ item: 'Horror', weight: 50 }, { item: 'Thriller', weight: 30 }, { item: 'Mystery', weight: 20 }] },
+  },
 ];
 
 interface DirectorSpec { id: string; first: string; last: string; age: number; overall: number; prestige: number; specialty: Director['genreSpecialty']; actorDev: number; boxOffice: number }
@@ -54,17 +79,28 @@ const NAMED_NPCS: NpcSpec[] = [
 
 /** Generated talent around the named core, by tier. */
 const ACTOR_FILL: { tier: NpcTier; count: number }[] = [
-  { tier: 'unknown', count: 26 }, { tier: 'working', count: 22 }, { tier: 'recognizable', count: 14 }, { tier: 'star', count: 8 }, { tier: 'superstar', count: 3 },
+  { tier: 'unknown', count: 38 }, { tier: 'working', count: 32 }, { tier: 'recognizable', count: 20 }, { tier: 'star', count: 11 }, { tier: 'superstar', count: 4 },
 ];
 const DIRECTOR_FILL: { tier: DirectorTier; count: number }[] = [
-  { tier: 'new', count: 7 }, { tier: 'working', count: 11 }, { tier: 'established', count: 7 }, { tier: 'elite', count: 3 },
+  { tier: 'new', count: 11 }, { tier: 'working', count: 17 }, { tier: 'established', count: 11 }, { tier: 'elite', count: 5 },
 ];
+
+function studioFromSpec(universeId: Id, s: StudioSpec): Studio {
+  return {
+    id: s.id, universeId, name: s.name, identity: s.identity, description: s.description, reputation: s.reputation, playerRelationship: 50,
+    slateTarget: s.slateTarget, greenlitThisYear: 0, dealTemper: 50, filmLog: [], ...(s.slate ? { slate: structuredClone(s.slate) } : {}),
+  };
+}
 
 /** Rebuild a studio row from its template (studio ids are fixed, so a lost row can be restored exactly). */
 export function studioFromTemplate(universeId: Id, id: Id): Studio | undefined {
   const s = STUDIOS.find((t) => t.id === id);
-  if (!s) return undefined;
-  return { id: s.id, universeId, name: s.name, identity: s.identity, description: s.description, reputation: s.reputation, playerRelationship: 50, slateTarget: s.slateTarget, greenlitThisYear: 0, dealTemper: 50, filmLog: [] };
+  return s ? studioFromSpec(universeId, s) : undefined;
+}
+
+/** Every studio id in the template (so a loaded universe can be topped up with studios added since it was created). */
+export function templateStudioIds(): Id[] {
+  return STUDIOS.map((s) => s.id);
 }
 
 export interface UniverseSeed {
@@ -77,10 +113,7 @@ export interface UniverseSeed {
 
 /** Build the opening universe (no movies yet — prehistory ticks create them). Deterministic per worldSeed. */
 export function seedUniverse(universeId: Id, worldSeed: number, week: number): UniverseSeed {
-  const studios: Studio[] = STUDIOS.map((s) => ({
-    id: s.id, universeId, name: s.name, identity: s.identity, description: s.description,
-    reputation: s.reputation, playerRelationship: 50, slateTarget: s.slateTarget, greenlitThisYear: 0, dealTemper: 50, filmLog: [],
-  }));
+  const studios: Studio[] = STUDIOS.map((s) => studioFromSpec(universeId, s));
 
   const names = new Set<string>();
   let counter = 0;

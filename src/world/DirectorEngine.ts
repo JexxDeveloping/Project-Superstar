@@ -78,7 +78,7 @@ export function recordDirectorResult(ws: WorkingSet, movie: Movie): void {
 /** A couple of new directors per year, usually unknowns; occasionally a hot arrival from elsewhere. */
 export function emergeDirectors(universeId: Id, worldSeed: number, week: number, counterStart: number, ws: WorkingSet, bus: EventBus): Director[] {
   const rng = rngFor(worldSeed, 'directors', week, 'emerge');
-  const n = rng.int(1, 3);
+  const n = rng.int(2, 4);
   const names = takenNames(ws);
   const out: Director[] = [];
   for (let i = 0; i < n; i++) {

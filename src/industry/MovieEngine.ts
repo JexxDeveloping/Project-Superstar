@@ -4,7 +4,7 @@
  * plus the cast bookkeeping (attach, wrap credits, release) other engines rely on.
  */
 import {
-  type GameState, type Id, type Movie, type Person, type Role, type RoleType, type WorkingSet, markDirty,
+  sortedById, type GameState, type Id, type Movie, type Person, type Role, type RoleType, type WorkingSet, markDirty,
 } from '../core/GameState';
 import type { EventBus } from '../core/EventBus';
 import { rngFor } from '../core/RNG';
@@ -75,7 +75,7 @@ export function tickMovies(state: GameState, ws: WorkingSet, bus: EventBus): Mov
   const out: MovieTransition[] = [];
   const week = state.week;
   const playerId = state.player.id;
-  for (const movie of ws.movies.values()) {
+  for (const movie of sortedById(ws.movies.values())) {
     if (movie.status === 'pre-production' && movie.productionStartWeek <= week && hasPlayer(movie, playerId)) {
       out.push({ movieId: movie.id, to: 'player-ready' });
       continue;

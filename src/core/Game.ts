@@ -16,7 +16,7 @@ import { seedFromString } from './RNG';
 import { advanceWeek } from './TimeEngine';
 import { EventBus } from './EventBus';
 import { ACTION_COSTS, createPlayer, dayJobById, type PlayerSpec } from '../sim/ActorEngine';
-import { seedUniverse, studioFromTemplate } from '../world/IndustryEngine';
+import { seedUniverse, studioFromTemplate, templateStudioIds } from '../world/IndustryEngine';
 import { acceptOffer, applyBlockedReason, declineOffer, findApplication, findListing, readScriptBlockedReason, refreshListings, setPrep } from '../industry/AuditionEngine';
 import { counterOffer } from '../industry/ContractEngine';
 import { fireAgent, generateAgents, hireAgent } from '../world/AgentEngine';
@@ -189,6 +189,15 @@ export class Game {
     if (!state.genreTrends) state.genreTrends = initGenreTrends(state.worldSeed);
     if (!state.records) state.records = emptyRecords();
     for (const st of ws.studios.values()) if (!st.filmLog) { st.filmLog = []; markDirty(ws, 'studios', st.id); }
+    // Studios added to the template after this universe was created join it now (names/slates refresh too).
+    for (const id of templateStudioIds()) {
+      const tpl = studioFromTemplate(state.universeId, id)!;
+      const existing = ws.studios.get(id);
+      if (!existing) { ws.studios.set(id, tpl); markDirty(ws, 'studios', id); continue; }
+      if (existing.name !== tpl.name || existing.description !== tpl.description || JSON.stringify(existing.slate) !== JSON.stringify(tpl.slate)) {
+        existing.name = tpl.name; existing.description = tpl.description; existing.slate = tpl.slate; markDirty(ws, 'studios', id);
+      }
+    }
     for (const d of ws.directors.values()) if (!d.credits) { d.credits = []; markDirty(ws, 'directors', d.id); }
     for (const p of ws.people.values()) if (p.cumulativeGross === undefined) { p.cumulativeGross = 0; p.reviewCount = 0; markDirty(ws, 'people', p.id); }
     const game = new Game(state, ws, save);

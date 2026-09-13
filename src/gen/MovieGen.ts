@@ -5,7 +5,7 @@
  */
 import {
   BUDGET_TIERS, clamp, type BudgetTier, type Director, type Gender, type Genre, type Id, type Movie, type MovieRating, type MovieType,
-  type Role, type RoleType, type Studio, type StudioIdentity,
+  type Role, type RoleType, type SlateProfile, type Studio, type StudioIdentity, type Weighted,
 } from '../core/GameState';
 import { rngFor, type Rng } from '../core/RNG';
 import { generateCharacterName } from './NameGen';
@@ -45,9 +45,8 @@ export function tierIndex(tier: BudgetTier): number {
 // Studio profiles: what each kind of studio makes
 // ---------------------------------------------------------------------------
 
-interface Weighted<T> { item: T; weight: number }
-
-export const STUDIO_PROFILES: Record<StudioIdentity, { tiers: Weighted<BudgetTier>[]; genres: Weighted<Genre>[] }> = {
+/** Default slate by identity; a studio can carry its own `slate` instead. */
+export const STUDIO_PROFILES: Record<StudioIdentity, SlateProfile> = {
   blockbuster: {
     tiers: [{ item: 'Medium', weight: 30 }, { item: 'Large', weight: 45 }, { item: 'Tentpole', weight: 25 }],
     genres: [{ item: 'Action', weight: 30 }, { item: 'Fantasy', weight: 18 }, { item: 'Science Fiction', weight: 18 }, { item: 'Thriller', weight: 12 }, { item: 'Family', weight: 12 }, { item: 'Comedy', weight: 10 }],
@@ -285,8 +284,8 @@ export function generateMetadata(rng: Rng, genres: Genre[], tier: BudgetTier): {
 }
 
 /** Studios chase what is in fashion: slate weights bend toward hot genres and away from cold ones. */
-export function pickTierAndGenres(rng: Rng, studio: Studio, trends?: Partial<Record<Genre, number>>): { tier: BudgetTier; genres: Genre[] } {
-  const profile = STUDIO_PROFILES[studio.identity];
+export function pickTierAndGenres(rng: Rng, studio: Pick<Studio, 'identity' | 'slate'>, trends?: Partial<Record<Genre, number>>): { tier: BudgetTier; genres: Genre[] } {
+  const profile: SlateProfile = studio.slate ?? STUDIO_PROFILES[studio.identity];
   const tier = rng.weighted(profile.tiers);
   const primary = rng.weighted(trends ? profile.genres.map((w) => ({ item: w.item, weight: w.weight * Math.pow(trends[w.item] ?? 1, 1.5) })) : profile.genres);
   const genres: Genre[] = [primary];

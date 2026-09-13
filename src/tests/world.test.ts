@@ -100,7 +100,7 @@ describe('Living world — 10 idle years', () => {
   it('star power stays a pyramid — no inflation', () => {
     const active = people.filter((p) => p.status === 'active');
     const stars = active.map((p) => p.attributes.starPower);
-    expect(stars.filter((s) => s >= 85).length).toBeLessThanOrEqual(8);
+    expect(stars.filter((s) => s >= 85).length).toBeLessThanOrEqual(12); // ~370 active actors across 12 studios
     expect(stars.filter((s) => s >= 85).length).toBeGreaterThanOrEqual(1);
     expect(stars.filter((s) => s < 50).length / stars.length).toBeGreaterThan(0.6);
     expect(Math.max(...active.map((p) => p.attributes.acting))).toBeLessThanOrEqual(100);

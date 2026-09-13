@@ -14,7 +14,7 @@ describe('SaveEngine — Dexie persistence', () => {
     expect(loaded!.state).toEqual(game.state);
     expect(loaded!.ws.movies.size).toBe(game.ws.movies.size);
     expect(loaded!.ws.people.size).toBe(game.ws.people.size);
-    expect(loaded!.ws.studios.size).toBe(6);
+    expect(loaded!.ws.studios.size).toBe(12);
     expect(loaded!.ws.directors.size).toBe(game.ws.directors.size);
     save.close();
   });
@@ -33,6 +33,19 @@ describe('SaveEngine — Dexie persistence', () => {
     const a = game.endWeek();
     const b = loaded!.endWeek();
     expect(b).toEqual(a);
+    save.close();
+  });
+
+  it('tops up a loaded universe with studios added to the template since it was created', async () => {
+    const save = new SaveEngine('test-db-topup');
+    const game = await Game.createAndSave({ player: spec, seed: 'save-topup' }, save);
+    // Simulate a save from before Wraith Films existed: remove it and every film it made.
+    const gone = [...game.ws.movies.values()].filter((m) => m.studioId === 'st-wraith').map((m) => m.id);
+    await save.deleteRows({ studios: ['st-wraith'], movies: gone });
+    const loaded = (await Game.load(save, game.state.universeId))!;
+    expect(loaded.ws.studios.size).toBe(12);
+    expect(loaded.ws.studios.get('st-wraith')?.name).toBe('Wraith Films');
+    expect(loaded.ws.studios.get('st-wraith')?.slate).toBeDefined();
     save.close();
   });
 

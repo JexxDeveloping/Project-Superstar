@@ -110,7 +110,7 @@ export function allTimeGate(ws: WorkingSet, week: number): number {
  * Hit 15 / Super Hit 8 / Blockbuster 5 / All-Time 2 across the whole industry.
  */
 export const TIER_OPENING: Record<BudgetTier, number> = {
-  'Micro Indie': 0.92, 'Indie': 0.74, 'Small Studio': 0.60, 'Medium': 0.50, 'Large': 0.35, 'Tentpole': 0.26,
+  'Micro Indie': 1.02, 'Indie': 0.82, 'Small Studio': 0.66, 'Medium': 0.55, 'Large': 0.39, 'Tentpole': 0.29,
 };
 /** How much cast star power moves the opening; names matter far more on a tentpole than a micro-indie. */
 const STAR_WEIGHT: Record<BudgetTier, number> = {
@@ -203,7 +203,7 @@ export function expectedOpening(state: GameState, ws: WorkingSet, movie: Movie, 
   const buzz = potential * (1 + (critic - 55) / 400) * (0.85 + ((director?.boxOfficeRecord ?? 50) / 100) * 0.3) * (0.9 + ((studio?.reputation ?? 50) / 100) * 0.2);
   const base = normalOpening(movie) * marketing * stars * franchise * genrePop * window * buzz;
   const pressure = competitionPressure(movie, base, rivals);
-  const competition = 1 / (1 + 0.45 * pressure) * (1 - 0.03 * Math.min(5, rivals.length));
+  const competition = 1 / (1 + 0.3 * pressure) * (1 - 0.02 * Math.min(5, rivals.length));
   return base * competition;
 }
 
@@ -295,7 +295,7 @@ export function tickRun(state: GameState, movie: Movie, openers: Opener[]): Week
     pressure += p;
     if (p > topPress) { topPress = p; topRival = o.movie; }
   }
-  pressure *= 0.35;
+  pressure *= 0.25;
   const competition = 1 / (1 + 0.35 * pressure);
   const age = n <= 4 ? 1 : Math.pow(0.955, n - 4);
   // Once the opening-weekend crowd is gone the audience that is left drops more gently.

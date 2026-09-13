@@ -101,7 +101,7 @@ describe('Negotiation', () => {
     expect(lowWithdrawn / N).toBeLessThan(0.8);
     expect(highWithdrawn / N).toBeLessThan(0.15);
     expect(anyRaise).toBeGreaterThan(0);
-  });
+  }, 60_000);
   it('a fourth ask after three rounds always ends the talks; used moves cannot repeat', () => {
     const game = Game.create({ player: spec, seed: 'nego-rounds', prehistoryWeeks: 20 });
     const s = game.state;

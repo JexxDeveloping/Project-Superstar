@@ -146,6 +146,16 @@ export interface Studio {
   dealTemper: number; // 0–100
   /** Per-film record, appended when each film's run resolves (basis for studio profiles later). */
   filmLog: StudioFilmLogEntry[];
+  /** This studio's own slate mix; when absent the identity's default profile is used. */
+  slate?: SlateProfile;
+}
+
+export interface Weighted<T> { item: T; weight: number }
+
+/** What a studio makes: budget tiers and primary genres, as weighted picks. */
+export interface SlateProfile {
+  tiers: Weighted<BudgetTier>[];
+  genres: Weighted<Genre>[];
 }
 
 export interface StudioFilmLogEntry {
@@ -669,6 +679,15 @@ export function clearDirty(ws: WorkingSet): void {
   ws.dirty.movies.clear();
   ws.dirty.studios.clear();
   ws.dirty.directors.clear();
+}
+
+/**
+ * Canonical iteration order for working-set records. A fresh universe's Maps are in creation order
+ * while a loaded one's come back sorted by id, so every loop whose side effects depend on order
+ * (who greenlights first, which film casts first, which director is free) walks records in id order.
+ */
+export function sortedById<T extends { id: Id }>(items: Iterable<T>): T[] {
+  return [...items].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
 
 export function fullName(p: { firstName: string; lastName: string }): string {

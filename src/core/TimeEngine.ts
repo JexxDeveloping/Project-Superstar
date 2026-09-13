@@ -8,7 +8,7 @@
  */
 import {
   TIMELINE_CAP, fullName, type GameState, type Movie, type MovieResult, type PerformanceResult, type QualityResult,
-  type StatDelta, type TimelineEvent, type Verdict, type WeekNote, type WorkingSet, markDirty,
+  sortedById, type StatDelta, type TimelineEvent, type Verdict, type WeekNote, type WorkingSet, markDirty,
 } from './GameState';
 import { EventBus } from './EventBus';
 import { ageInYears, resolvePlayerWeek, starTier, WEEKS_PER_YEAR } from '../sim/ActorEngine';
@@ -212,7 +212,7 @@ export function advanceWeek(state: GameState, ws: WorkingSet, opts: TickOptions 
 
   // 2. Studios greenlight; casting windows close (roles the player is still up for are held).
   greenlightSlates(state, ws, bus);
-  for (const movie of ws.movies.values()) {
+  for (const movie of sortedById(ws.movies.values())) {
     if (movie.status !== 'casting') continue;
     if (movie.castingCloseWeek > week) continue;
     const force = week >= movie.productionStartWeek || week >= movie.castingCloseWeek + 4;
@@ -262,7 +262,7 @@ export function advanceWeek(state: GameState, ws: WorkingSet, opts: TickOptions 
   // 3b. Recovery: a player film already marked filming with no shoot running (e.g. a save from
   //     before hold-and-recast existed) starts its shoot now rather than hanging forever.
   if (!worldOnly && !state.activeProduction) {
-    for (const movie of ws.movies.values()) {
+    for (const movie of sortedById(ws.movies.values())) {
       if (movie.status !== 'filming' || !hasPlayer(movie, player.id)) continue;
       if (beginPlayerShoot(movie)) {
         bus.emit('production', `${movie.title} starts filming`, `The production waited for you — ${movie.productionWeeks} weeks scheduled.`);

@@ -174,7 +174,7 @@ export function takenNames(ws: WorkingSet): Set<string> {
 /** A yearly wave of newcomers: mostly unknowns, a few high-ceiling prospects. Returns the new people. */
 export function cohortEntry(universeId: Id, worldSeed: number, week: number, counterStart: number, ws: WorkingSet, bus: EventBus): Person[] {
   const rng = rngFor(worldSeed, 'cohort', week, 'size');
-  const n = rng.int(12, 20);
+  const n = rng.int(18, 28);
   const names = takenNames(ws);
   const out: Person[] = [];
   for (let i = 0; i < n; i++) {

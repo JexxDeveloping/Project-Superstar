@@ -2,7 +2,7 @@
  * StudioEngine — studios as slates: each greenlights films toward an annual target in its own
  * identity, and its reputation drifts with results.
  */
-import { clamp, type GameState, type Movie, type Studio, type WorkingSet, markDirty } from '../core/GameState';
+import { clamp, sortedById, type GameState, type Movie, type Studio, type WorkingSet, markDirty } from '../core/GameState';
 import { rngFor } from '../core/RNG';
 import type { EventBus } from '../core/EventBus';
 import { WEEKS_PER_YEAR } from '../sim/ActorEngine';
@@ -23,10 +23,10 @@ export function greenlightSlates(state: GameState, ws: WorkingSet, bus: EventBus
   const { week, worldSeed, universeId } = state;
   const out: Movie[] = [];
   const titles = takenTitles(ws);
-  const directors = [...ws.directors.values()];
+  const directors = sortedById(ws.directors.values());
   const weekOfYear = ((week % WEEKS_PER_YEAR) + WEEKS_PER_YEAR) % WEEKS_PER_YEAR; // prehistory weeks are negative
 
-  for (const studio of ws.studios.values()) {
+  for (const studio of sortedById(ws.studios.values())) {
     if (weekOfYear === 0) studio.greenlitThisYear = 0;
     const expectedByNow = (studio.slateTarget * (weekOfYear + 1)) / WEEKS_PER_YEAR;
     const behind = expectedByNow - studio.greenlitThisYear; // >0 behind schedule

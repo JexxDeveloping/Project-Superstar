@@ -204,11 +204,13 @@ export function roleFit(p: Person, role: Role, movie: Movie, week: number): numb
 
 /** Deterministic shortlist of NPC candidates for a role. */
 export function shortlistFor(worldSeed: number, movie: Movie, role: Role, ws: WorkingSet, week: number, size = 4): Person[] {
-  const rng = rngFor(worldSeed, movie.id, movie.announcedWeek, `shortlist:${role.id}`);
   const scored: { p: Person; s: number }[] = [];
   for (const p of ws.people.values()) {
     if (p.isPlayer || !eligibleFor(p, role, movie, week)) continue;
-    scored.push({ p, s: roleFit(p, role, movie, week) + rng.variance(10) });
+    // Each candidate's "form" roll is seeded on the candidate, not drawn from a shared stream, so the
+    // shortlist is the same whatever order the people map is walked in (creation order vs. a loaded save).
+    const form = rngFor(worldSeed, p.id, movie.announcedWeek, `shortlist:${role.id}`).variance(10);
+    scored.push({ p, s: roleFit(p, role, movie, week) + form });
   }
   scored.sort((a, b) => b.s - a.s || (a.p.id < b.p.id ? -1 : 1));
   return scored.slice(0, size).map((x) => x.p);
