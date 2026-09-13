@@ -7,7 +7,6 @@
   import { CAMPAIGN_LABEL } from './format';
 
   const s = $derived(store.state!);
-  const history = $derived(s.applications.filter((a) => !['applied', 'audition_pending', 'offer', 'booked'].includes(a.status)).slice().reverse());
 
   const STATUS: Record<string, [string, string]> = {
     applied: ['Awaiting callback', 'info'], no_callback: ['No callback', 'bad'], audition_pending: ['Audition next week', 'warn'],
@@ -62,24 +61,4 @@
     </div>
   </section>
 
-  {#if history.length > 0}
-    <section class="panel">
-      <div class="panel-head"><h3>Past applications</h3></div>
-      <table class="data">
-        <thead><tr><th>Week</th><th>Movie</th><th>Role</th><th>Outcome</th><th class="num">Score</th><th>Room</th></tr></thead>
-        <tbody>
-          {#each history as a}
-            <tr>
-              <td class="muted">{formatDate(a.appliedWeek, s.epochYear)}</td>
-              <td><strong>{a.movieTitle}</strong></td>
-              <td>{a.characterName} <span class="muted tiny">{a.roleType}</span></td>
-              <td><span class="tag {STATUS[a.status][1]}">{STATUS[a.status][0]}</span></td>
-              <td class="num mono">{a.auditionScore ?? '—'}</td>
-              <td class="muted small-text">{a.directorReaction ?? ''}</td>
-            </tr>
-          {/each}
-        </tbody>
-      </table>
-    </section>
-  {/if}
 </div>
