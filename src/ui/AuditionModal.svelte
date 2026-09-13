@@ -92,9 +92,14 @@
         </section>
       {:else if app?.status === 'offer'}
         <section class="panel">
-          <div class="panel-head"><h3>Audition result</h3><span class="tag good">Offer</span></div>
-          <div class="stat-big">Score {app.auditionScore}/100</div>
-          <p class="muted">"{app.directorReaction}"</p>
+          <div class="panel-head"><h3>{app.source === 'direct' ? 'Direct offer' : 'Audition result'}</h3><span class="tag good">Offer</span></div>
+          {#if app.source === 'direct'}
+            <div class="stat-big">No audition</div>
+            <p class="muted">{store.studio(movie.studioId)?.name} sent this part straight to you — a name doesn't read for the room.</p>
+          {:else}
+            <div class="stat-big">Score {app.auditionScore}/100</div>
+            <p class="muted">"{app.directorReaction}"</p>
+          {/if}
           <div class="card" style="margin-top:12px">
             <div class="row spread wrap">
               <div><strong>{listing.roleType}</strong> · opening at {formatMoney(app.contract?.terms.baseSalary ?? listing.expectedSalary)} · {movie.productionWeeks}-week shoot from {formatDate(movie.productionStartWeek, s.epochYear)}</div>
@@ -109,8 +114,13 @@
       {:else if app?.status === 'booked' || app?.status === 'in_production'}
         <section class="panel">
           <div class="panel-head"><h3>Booked</h3><span class="tag good">{app.status === 'booked' ? 'Awaiting shoot' : 'Filming'}</span></div>
-          <div class="stat-big">Score {app.auditionScore}/100</div>
-          <p class="muted">"{app.directorReaction}"</p>
+          {#if app.source === 'direct'}
+            <div class="stat-big">Direct offer</div>
+            <p class="muted">Sent to you without an audition.</p>
+          {:else}
+            <div class="stat-big">Score {app.auditionScore}/100</div>
+            <p class="muted">"{app.directorReaction}"</p>
+          {/if}
           <p style="margin-top:8px">
             {#if app.status === 'booked'}
               Shoot begins {formatDate(movie.productionStartWeek, s.epochYear)} ({Math.max(0, movie.productionStartWeek - s.week)} week{movie.productionStartWeek - s.week === 1 ? '' : 's'} away) · {movie.productionWeeks} weeks · {formatMoney(listing.expectedSalary)} on wrap.

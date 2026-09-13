@@ -158,7 +158,7 @@ export function refreshListings(state: GameState, ws: WorkingSet, bus: EventBus)
         roleId: role.id,
         characterName: role.characterName,
         roleType: role.roleType,
-        expectedSalary: salaryGuideline(player.attributes.starPower, role),
+        expectedSalary: salaryGuideline(player.attributes.starPower, role, movie.budget),
         difficulty: role.difficulty,
         requiredActing: role.requiredActing,
         preferredGenre: movie.genres[0],

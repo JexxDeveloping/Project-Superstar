@@ -37,15 +37,29 @@ export const ROLE_SALARY_FLOOR: Record<RoleType, number> = {
   'Extra': 200, 'Minor': 600, 'Supporting': 1_500, 'Co-Lead': 3_000, 'Lead': 5_000, 'Main Protagonist': 6_000,
 };
 
-/** What an actor of this star power commands for this role, within Part 1's guideline band. */
-export function salaryGuideline(starPower: number, role: Role): number {
+/** The most a film can pay one role as a share of its production budget — a star on an indie works for scale. */
+export const BUDGET_SHARE_CAP: Record<RoleType, number> = {
+  'Main Protagonist': 0.30, 'Lead': 0.25, 'Co-Lead': 0.15, 'Supporting': 0.08, 'Minor': 0.03, 'Extra': 0.01,
+};
+
+/**
+ * What an actor of this star power commands for this role, within Part 1's guideline band, and
+ * never more than the film's budget can carry (`budget` caps it; omit for a pure band lookup).
+ */
+export function salaryGuideline(starPower: number, role: Role, budget?: number): number {
   const starFactor = 0.5 + (starPower / 100) * 1.5;
   const band = GUIDELINE_BANDS.find((b) => starPower >= b.minStar)!;
   // Role size still matters inside the band: a Minor part for an A-lister isn't a lead's paycheck.
   const roleScale = { 'Main Protagonist': 1.1, 'Lead': 1, 'Co-Lead': 0.7, 'Supporting': 0.35, 'Minor': 0.12, 'Extra': 0.03 }[role.roleType];
   const raw = role.salary * starFactor;
-  const floor = Math.max(band.lo * roleScale, ROLE_SALARY_FLOOR[role.roleType]);
-  const ceiling = Math.max(band.hi * roleScale, floor);
+  const unionFloor = ROLE_SALARY_FLOOR[role.roleType];
+  let floor = Math.max(band.lo * roleScale, unionFloor);
+  let ceiling = Math.max(band.hi * roleScale, floor);
+  if (budget !== undefined) {
+    const cap = Math.max(unionFloor, budget * BUDGET_SHARE_CAP[role.roleType]);
+    ceiling = Math.min(ceiling, cap);
+    floor = Math.min(floor, ceiling);
+  }
   return roundMoney(clamp(raw, floor, ceiling));
 }
 
@@ -106,7 +120,7 @@ export function generateOffer(state: GameState, ws: WorkingSet, movie: Movie, ro
   const p = state.player;
   const studio = ws.studios.get(movie.studioId) as Studio;
   const rng = rngFor(state.worldSeed, movie.id, state.week, `offer:${role.id}`);
-  const guideline = salaryGuideline(p.attributes.starPower, role);
+  const guideline = salaryGuideline(p.attributes.starPower, role, movie.budget);
   const temperFactor = 0.85 + studio.dealTemper / 500; // 0.85–1.05
   const baseSalary = roundMoney(guideline * temperFactor * (ctx.direct ? 1.15 : 1) * rng.multiplier(0.08));
 

@@ -41,6 +41,13 @@ describe('Salary guidelines (Part 1 scaling)', () => {
     expect(salaryGuideline(5, role(750, 'Supporting'))).toBeGreaterThanOrEqual(1_500);
     expect(salaryGuideline(5, role(3_000, 'Lead'))).toBeGreaterThanOrEqual(5_000);
   });
+  it('never pays more than the film can carry: a star on a micro-indie works for a share of the budget', () => {
+    expect(salaryGuideline(100, role(3_000, 'Lead'), 910_000)).toBeLessThanOrEqual(910_000 * 0.25 + 5_000); // rounded to the nearest $5K
+    expect(salaryGuideline(100, role(3_000, 'Lead'), 910_000)).toBeGreaterThanOrEqual(5_000);
+    expect(salaryGuideline(100, role(8_000_000, 'Lead'), 250_000_000)).toBeGreaterThanOrEqual(12_000_000);
+    expect(salaryGuideline(100, role(150_000 * 0.25, 'Supporting'), 20_000_000)).toBeLessThanOrEqual(20_000_000 * 0.08 + 5_000);
+  });
+
   it('scales down for smaller parts inside the band', () => {
     expect(salaryGuideline(85, role(8_000_000 * 0.08, 'Minor'))).toBeLessThan(salaryGuideline(85, role(8_000_000, 'Lead')));
   });
@@ -318,7 +325,7 @@ describe('Rookie economy', () => {
     for (const l of s.listings) {
       const movie = game.ws.movies.get(l.movieId)!;
       const role = movie.roles.find((r) => r.id === l.roleId)!;
-      expect(l.expectedSalary).toBe(salaryGuideline(s.player.attributes.starPower, role));
+      expect(l.expectedSalary).toBe(salaryGuideline(s.player.attributes.starPower, role, movie.budget));
       expect(l.expectedSalary).toBeGreaterThanOrEqual(600);
     }
   });
