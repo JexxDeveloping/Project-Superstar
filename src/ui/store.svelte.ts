@@ -18,7 +18,7 @@ export interface WorldView {
   people: Map<Id, Person>;
 }
 
-export type Screen = 'home' | 'auditions' | 'scripts' | 'production' | 'career' | 'industry' | 'timeline';
+export type Screen = 'home' | 'auditions' | 'scripts' | 'production' | 'career' | 'industry';
 
 const SKIP_MAX_WEEKS = 26;
 

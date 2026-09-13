@@ -8,7 +8,6 @@
   import AuditionModal from './AuditionModal.svelte';
   import Production from './Production.svelte';
   import Career from './Career.svelte';
-  import Timeline from './Timeline.svelte';
   import Industry from './Industry.svelte';
   import Scripts from './Scripts.svelte';
   import ContractModal from './ContractModal.svelte';
@@ -22,7 +21,6 @@
     { id: 'production', label: 'Production' },
     { id: 'career', label: 'Career' },
     { id: 'industry', label: 'Industry' },
-    { id: 'timeline', label: 'Timeline' },
   ];
 
   onMount(() => { void store.init(); });
@@ -58,8 +56,7 @@
         {:else if store.screen === 'scripts'}<Scripts />
         {:else if store.screen === 'production'}<Production />
         {:else if store.screen === 'career'}<Career />
-        {:else if store.screen === 'industry'}<Industry />
-        {:else}<Timeline />{/if}
+        {:else}<Industry />{/if}
         {/key}
       </main>
     </div>
