@@ -212,9 +212,9 @@ export function advanceWeek(state: GameState, ws: WorkingSet, opts: TickOptions 
 
   // 2. Studios greenlight; casting windows close (roles the player is still up for are held).
   greenlightSlates(state, ws, bus);
-  for (const movie of sortedById(ws.movies.values())) {
-    if (movie.status !== 'casting') continue;
-    if (movie.castingCloseWeek > week) continue;
+  const closing: Movie[] = [];
+  for (const movie of ws.movies.values()) if (movie.status === 'casting' && movie.castingCloseWeek <= week) closing.push(movie);
+  for (const movie of sortedById(closing)) {
     const force = week >= movie.productionStartWeek || week >= movie.castingCloseWeek + 4;
     closeCasting(state, movie, ws, bus, force);
   }
@@ -262,8 +262,9 @@ export function advanceWeek(state: GameState, ws: WorkingSet, opts: TickOptions 
   // 3b. Recovery: a player film already marked filming with no shoot running (e.g. a save from
   //     before hold-and-recast existed) starts its shoot now rather than hanging forever.
   if (!worldOnly && !state.activeProduction) {
-    for (const movie of sortedById(ws.movies.values())) {
-      if (movie.status !== 'filming' || !hasPlayer(movie, player.id)) continue;
+    const stalled: Movie[] = [];
+    for (const movie of ws.movies.values()) if (movie.status === 'filming' && hasPlayer(movie, player.id)) stalled.push(movie);
+    for (const movie of sortedById(stalled)) {
       if (beginPlayerShoot(movie)) {
         bus.emit('production', `${movie.title} starts filming`, `The production waited for you — ${movie.productionWeeks} weeks scheduled.`);
         break;

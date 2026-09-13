@@ -249,8 +249,11 @@ describe('Verdict, gate, tracking, fame vs trust', () => {
       expect(Math.abs(r.profit! - (take + r.afterlife! - (m.budget + m.marketingBudget)))).toBeLessThanOrEqual(1);
       const v: Verdict = r.verdict!;
       const ladder: [number, Verdict][] = [[0, 'Disaster'], [0.4, 'Flop'], [0.75, 'Average'], [1.1, 'Hit'], [1.5, 'Super Hit'], [2, 'Blockbuster'], [3, 'All-Time Blockbuster']];
+      // The stored recoup is rounded to 3 decimals; a film within that of a cutoff may sit on either side.
+      const near = ladder.some(([min]) => min > 0 && Math.abs(r.recoup! - min) < 0.002);
       const expected = ladder.filter(([min]) => r.recoup! >= min).pop()![1];
       if (expected === 'All-Time Blockbuster') expect(['All-Time Blockbuster', 'Blockbuster']).toContain(v);
+      else if (near) expect(Math.abs(ladder.findIndex(([, l]) => l === v) - ladder.findIndex(([, l]) => l === expected))).toBeLessThanOrEqual(1);
       else expect(v).toBe(expected);
     }
   });

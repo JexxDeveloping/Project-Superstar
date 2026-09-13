@@ -10,7 +10,7 @@ import {
   clamp, completedCredits, fullName, type AuditionListing, type BudgetTier, type CompetitorScore, type Director, type GameState,
   type Id, type Movie, type Person, type Role, type Studio, type WorkingSet, markDirty,
 } from '../core/GameState';
-import { rngFor, type Rng } from '../core/RNG';
+import { Rng, combineSeeds, hashSeed, rngFor } from '../core/RNG';
 import type { EventBus } from '../core/EventBus';
 import { ageInYears } from '../sim/ActorEngine';
 import { generateActor, takenNames } from '../sim/NPCEngine';
@@ -202,14 +202,23 @@ export function roleFit(p: Person, role: Role, movie: Movie, week: number): numb
   return fit;
 }
 
+/** Ids are immutable, so their hashes are cached for the hot casting loops. */
+const ID_HASH = new Map<string, number>();
+function idHash(id: string): number {
+  let h = ID_HASH.get(id);
+  if (h === undefined) { h = hashSeed(id); ID_HASH.set(id, h); }
+  return h;
+}
+
 /** Deterministic shortlist of NPC candidates for a role. */
 export function shortlistFor(worldSeed: number, movie: Movie, role: Role, ws: WorkingSet, week: number, size = 4): Person[] {
   const scored: { p: Person; s: number }[] = [];
+  // Each candidate's "form" roll is seeded on the candidate, not drawn from a shared stream, so the
+  // shortlist is the same whatever order the people map is walked in (creation order vs. a loaded save).
+  const roleSeed = rngFor(worldSeed, movie.id, movie.announcedWeek, `shortlist:${role.id}`).seed;
   for (const p of ws.people.values()) {
     if (p.isPlayer || !eligibleFor(p, role, movie, week)) continue;
-    // Each candidate's "form" roll is seeded on the candidate, not drawn from a shared stream, so the
-    // shortlist is the same whatever order the people map is walked in (creation order vs. a loaded save).
-    const form = rngFor(worldSeed, p.id, movie.announcedWeek, `shortlist:${role.id}`).variance(10);
+    const form = new Rng(combineSeeds(roleSeed, idHash(p.id))).variance(10);
     scored.push({ p, s: roleFit(p, role, movie, week) + form });
   }
   scored.sort((a, b) => b.s - a.s || (a.p.id < b.p.id ? -1 : 1));

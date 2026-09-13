@@ -75,7 +75,10 @@ export function tickMovies(state: GameState, ws: WorkingSet, bus: EventBus): Mov
   const out: MovieTransition[] = [];
   const week = state.week;
   const playerId = state.player.id;
-  for (const movie of sortedById(ws.movies.values())) {
+  // Only films that can move this week are sorted (the map holds thousands of finished ones).
+  const live: Movie[] = [];
+  for (const movie of ws.movies.values()) if (movie.status === 'pre-production' || movie.status === 'filming' || movie.status === 'post-production') live.push(movie);
+  for (const movie of sortedById(live)) {
     if (movie.status === 'pre-production' && movie.productionStartWeek <= week && hasPlayer(movie, playerId)) {
       out.push({ movieId: movie.id, to: 'player-ready' });
       continue;

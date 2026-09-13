@@ -115,3 +115,16 @@ export function rngFor(worldSeed: number, entityId: string, week: number, eventI
 export function seedFromString(s: string): number {
   return hashString(s);
 }
+
+/** Hash any string to a 32-bit seed (cache the result for ids that are hashed every week). */
+export function hashSeed(s: string): number {
+  return hashString(s);
+}
+
+/** Combine two 32-bit seeds into one (order matters), for per-entity rolls inside a seeded context. */
+export function combineSeeds(a: number, b: number): number {
+  let h = (a ^ Math.imul(b, 0x9e3779b1)) >>> 0;
+  h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+  return (h ^ (h >>> 16)) >>> 0;
+}

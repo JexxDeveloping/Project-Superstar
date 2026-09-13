@@ -90,8 +90,9 @@ export function allTimeGate(ws: WorkingSet, week: number): number {
   const since = week - ATB_WINDOW_YEARS * WEEKS_PER_YEAR;
   const grosses: number[] = [];
   for (const m of ws.movies.values()) {
+    if (m.status !== 'completed') continue;
     const run = m.boxOffice;
-    if (!run?.finished || m.status !== 'completed') continue;
+    if (!run?.finished) continue;
     const ended = run.weeks[run.weeks.length - 1].week;
     if (ended >= since && ended < week) grosses.push(run.worldwide);
   }

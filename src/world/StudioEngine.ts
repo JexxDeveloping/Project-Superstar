@@ -9,10 +9,21 @@ import { WEEKS_PER_YEAR } from '../sim/ActorEngine';
 import { chooseDirector, generateMovie, pickTierAndGenres } from '../gen/MovieGen';
 import { VERDICT_RANK } from '../industry/BoxOfficeEngine';
 
+/** Title set per working set, rebuilt only when films appeared outside the greenlight pass (e.g. a load). */
+const TITLE_CACHE = new WeakMap<WorkingSet, { count: number; titles: Set<string> }>();
+
 export function takenTitles(ws: WorkingSet): Set<string> {
-  const s = new Set<string>();
-  for (const m of ws.movies.values()) s.add(m.title.toLowerCase());
-  return s;
+  const cached = TITLE_CACHE.get(ws);
+  if (cached && cached.count === ws.movies.size) return cached.titles;
+  const titles = new Set<string>();
+  for (const m of ws.movies.values()) titles.add(m.title.toLowerCase());
+  TITLE_CACHE.set(ws, { count: ws.movies.size, titles });
+  return titles;
+}
+
+function noteTitle(ws: WorkingSet, title: string): void {
+  const cached = TITLE_CACHE.get(ws);
+  if (cached) { cached.titles.add(title.toLowerCase()); cached.count = ws.movies.size; }
 }
 
 /**
@@ -44,6 +55,7 @@ export function greenlightSlates(state: GameState, ws: WorkingSet, bus: EventBus
       universeId, worldSeed, week, counter: state.genCounter, studio, director, takenTitles: titles, tier: picked.tier, genres: picked.genres, trends: state.genreTrends,
     });
     ws.movies.set(movie.id, movie);
+    noteTitle(ws, movie.title);
     markDirty(ws, 'movies', movie.id);
     director.activeMovieId = movie.id;
     markDirty(ws, 'directors', director.id);
